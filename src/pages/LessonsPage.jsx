@@ -1,4 +1,5 @@
 import "./LessonsPage.css";
+import spells from "../data/spells";
 
 function LessonsPage({
   lessons,
@@ -31,6 +32,48 @@ function LessonsPage({
                 Energiaköltség: {lesson.energyCost} · Jutalom: {lesson.xpReward}{" "}
                 XP
               </p>
+              {(() => {
+                const attendanceCount = player.lessonProgress[lesson.id] || 0;
+                const unlocks = lesson.spellUnlocks || [];
+                const nextUnlock = unlocks.find(
+                  (unlock) => !player.knownSpells.includes(unlock.spellId),
+                );
+                const nextSpell = nextUnlock
+                  ? spells.find((spell) => spell.id === nextUnlock.spellId)
+                  : null;
+                return (
+                  <div className="lesson-progression">
+                    {nextUnlock ? (
+                      <>
+                        <p>
+                          Tanulmányi haladás: {attendanceCount} /{" "}
+                          {nextUnlock.requiredAttendances}
+                        </p>
+                        <p>
+                          Következő megtanulható varázsige: {nextSpell?.name}
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        Minden jelenlegi varázsigét megtanultál ebből a
+                        tantárgyból.
+                      </p>
+                    )}
+                    {unlocks
+                      .filter((unlock) =>
+                        player.knownSpells.includes(unlock.spellId),
+                      )
+                      .map((unlock) => {
+                        const learnedSpell = spells.find(
+                          (spell) => spell.id === unlock.spellId,
+                        );
+                        return (
+                          <p key={unlock.spellId}>{learnedSpell?.name} ✓</p>
+                        );
+                      })}
+                  </div>
+                );
+              })()}
             </div>
             <button
               className="button"

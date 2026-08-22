@@ -11,6 +11,12 @@ import LessonsPage from "./pages/LessonsPage";
 import ShopPage from "./pages/ShopPage";
 import SpellsPage from "./pages/SpellsPage";
 import DuelPage from "./pages/DuelPage";
+import { getXpRequiredForLevel } from "./utils/leveling";
+import {
+  getMaxHealthForLevel,
+  getMaxManaForLevel,
+} from "./utils/playerProgression";
+import getStatUpgradeCost from "./utils/statUpgrades";
 
 const initialPlayer = {
   name: "Névtelen tanonc",
@@ -37,6 +43,7 @@ const initialPlayer = {
   },
   lastEnergyUpdate: Date.now(),
   lastManaUpdate: Date.now(),
+  lessonProgress: {},
 };
 
 const energyRegenerationInterval = 5 * 60 * 1000;
@@ -50,13 +57,21 @@ function loadPlayer() {
     const player = {
       ...initialPlayer,
       ...savedData,
+      maxHealth: getMaxHealthForLevel(savedData.level || initialPlayer.level),
+      maxMana: getMaxManaForLevel(savedData.level || initialPlayer.level),
       stats: { ...initialPlayer.stats, ...savedData.stats },
       equipment: { ...initialPlayer.equipment, ...savedData.equipment },
-      health: savedData.health ?? initialPlayer.health,
-      maxHealth: savedData.maxHealth ?? initialPlayer.maxHealth,
+      health: Math.min(
+        savedData.health ?? initialPlayer.health,
+        getMaxHealthForLevel(savedData.level || initialPlayer.level),
+      ),
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
       lastManaUpdate: savedData.lastManaUpdate || Date.now(),
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
+      lessonProgress: {
+        ...initialPlayer.lessonProgress,
+        ...savedData.lessonProgress,
+      },
     };
     const updatedPlayer = updateEnergy(player, Date.now());
     const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
@@ -165,6 +180,20 @@ function App() {
     setPlayer(nextPlayer);
   }
 
+  function getLevelProgression(nextLevel, nextXp) {
+    const previousMaxMana = getMaxManaForLevel(player.level);
+    const nextMaxMana = getMaxManaForLevel(nextLevel);
+    const manaIncrease = nextMaxMana - previousMaxMana;
+    return {
+      level: nextLevel,
+      xp: nextXp,
+      maxHealth: getMaxHealthForLevel(nextLevel),
+      maxMana: nextMaxMana,
+      mana: Math.min(nextMaxMana, player.mana + manaIncrease),
+      health: Math.min(getMaxHealthForLevel(nextLevel), player.health),
+    };
+  }
+
   useEffect(() => {
     // The one-second timer updates the UI; timestamps still decide when mana or energy is granted.
     const timerId = setInterval(() => {
@@ -234,6 +263,29 @@ function App() {
     setMessage(`${item.name} felszerelve.`);
   }
 
+  function upgradeStat(stat) {
+    if (!Object.hasOwn(player.stats, stat)) {
+      return;
+    }
+
+    const currentBaseStat = player.stats[stat];
+    const upgradeCost = getStatUpgradeCost(currentBaseStat);
+    if (player.gold < upgradeCost) {
+      setMessage("Nincs elegendő aranyad ehhez a fejlesztéshez.");
+      return;
+    }
+
+    persistPlayer({
+      ...player,
+      gold: player.gold - upgradeCost,
+      stats: {
+        ...player.stats,
+        [stat]: currentBaseStat + 1,
+      },
+    });
+    setMessage("A képességed egy ponttal megerősödött.");
+  }
+
   function unequipItem(slot) {
     persistPlayer({
       ...player,
@@ -250,44 +302,62 @@ function App() {
 
     let nextLevel = player.level;
     let nextXp = player.xp + lesson.xpReward;
-    while (nextXp >= 100) {
-      nextXp -= 100;
+    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
+      nextXp -= getXpRequiredForLevel(nextLevel);
       nextLevel += 1;
     }
 
     // XP rolls over after each level instead of accumulating past the threshold.
     const leveledUp = nextLevel > player.level;
+    const attendanceCount = (player.lessonProgress[lesson.id] || 0) + 1;
+    const learnedSpellIds = (lesson.spellUnlocks || [])
+      .filter(
+        (unlock) =>
+          unlock.requiredAttendances === attendanceCount &&
+          !player.knownSpells.includes(unlock.spellId),
+      )
+      .map((unlock) => unlock.spellId);
     const nextPlayer = {
       ...player,
       energy: player.energy - lesson.energyCost,
-      level: nextLevel,
-      xp: nextXp,
+      ...getLevelProgression(nextLevel, nextXp),
       lastEnergyUpdate:
         player.energy >= player.maxEnergy
           ? Date.now()
           : player.lastEnergyUpdate,
+      lessonProgress: {
+        ...player.lessonProgress,
+        [lesson.id]: attendanceCount,
+      },
+      knownSpells: [...player.knownSpells, ...learnedSpellIds],
     };
     persistPlayer(nextPlayer);
+    const learnedSpells = learnedSpellIds
+      .map((spellId) => spells.find((spell) => spell.id === spellId))
+      .filter((spell) => spell);
+    const learnedMessage =
+      learnedSpells.length > 0
+        ? ` Új varázsigét tanultál: ${learnedSpells.map((spell) => spell.name).join(", ")}!`
+        : "";
     setMessage(
       leveledUp
-        ? `Szintlépés! Elérted a(z) ${nextLevel}. szintet.`
-        : `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP`,
+        ? `Szintlépés! Elérted a(z) ${nextLevel}. szintet.${learnedMessage}`
+        : `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP.${learnedMessage}`,
     );
   }
 
   function awardDuelRewards(enemy) {
     let nextLevel = player.level;
     let nextXp = player.xp + enemy.xpReward;
-    while (nextXp >= 100) {
-      nextXp -= 100;
+    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
+      nextXp -= getXpRequiredForLevel(nextLevel);
       nextLevel += 1;
     }
 
     // Rewards are persisted centrally so the duel page only controls temporary combat state.
     persistPlayer({
       ...player,
-      level: nextLevel,
-      xp: nextXp,
+      ...getLevelProgression(nextLevel, nextXp),
       gold: player.gold + enemy.goldReward,
     });
     return {
@@ -321,6 +391,7 @@ function App() {
                 message={message}
                 onEquipItem={equipItem}
                 onUnequipItem={unequipItem}
+                onUpgradeStat={upgradeStat}
                 energyStatus={energyStatus}
                 manaStatus={manaStatus}
               />

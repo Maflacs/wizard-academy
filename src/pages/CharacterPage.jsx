@@ -1,5 +1,11 @@
 import { useState } from "react";
-import getEffectiveStats from "../utils/playerStats";
+import getEffectiveStats, { getEquipmentBonuses } from "../utils/playerStats";
+import { getXpRequiredForLevel } from "../utils/leveling";
+import {
+  getMaxHealthForLevel,
+  getMaxManaForLevel,
+} from "../utils/playerProgression";
+import getStatUpgradeCost from "../utils/statUpgrades";
 import "./CharacterPage.css";
 
 const equipmentSlots = [
@@ -15,6 +21,7 @@ function CharacterPage({
   message,
   onEquipItem,
   onUnequipItem,
+  onUpgradeStat,
   energyStatus,
   manaStatus,
 }) {
@@ -38,6 +45,11 @@ function CharacterPage({
     item: items.find((item) => item.id === player.equipment[slot.key]),
   }));
   const effectiveStats = getEffectiveStats(player, items);
+  const equipmentBonuses = getEquipmentBonuses(player, items);
+  const xpRequired = getXpRequiredForLevel(player.level);
+  const xpRemaining = Math.max(0, xpRequired - player.xp);
+  const maxHealth = getMaxHealthForLevel(player.level);
+  const maxMana = getMaxManaForLevel(player.level);
 
   return (
     <section className="page">
@@ -67,11 +79,23 @@ function CharacterPage({
           </div>
           <div>
             <dt>Tapasztalat</dt>
-            <dd>{player.xp} XP</dd>
+            <dd>
+              {player.xp} / {xpRequired} XP
+            </dd>
+          </div>
+          <div>
+            <dt>Szintlépésig</dt>
+            <dd>{xpRemaining} XP</dd>
           </div>
           <div>
             <dt>Arany</dt>
             <dd>{player.gold} korona</dd>
+          </div>
+          <div>
+            <dt>Életerő</dt>
+            <dd>
+              {player.health} / {maxHealth}
+            </dd>
           </div>
           <div>
             <dt>Energia</dt>
@@ -82,7 +106,7 @@ function CharacterPage({
           <div>
             <dt>Mana</dt>
             <dd>
-              {player.mana} / {player.maxMana}
+              {player.mana} / {maxMana}
             </dd>
           </div>
         </dl>
@@ -140,6 +164,47 @@ function CharacterPage({
               </li>
             ))}
           </ul>
+        </div>
+      </div>
+      <div className="parchment-panel stat-upgrades">
+        <h3 className="eyebrow title">Képességfejlesztés</h3>
+        <div className="stat-upgrade-list">
+          {[
+            [
+              "magicPower",
+              "Mágikus erő",
+              "Növeli a támadó varázsigék sebzését.",
+            ],
+            [
+              "defense",
+              "Védelem",
+              "Csökkenti az ellenfelektől kapott sebzést.",
+            ],
+            ["focus", "Fókusz", "Növeli a kritikus találat esélyét."],
+          ].map(([stat, label, description]) => {
+            const baseValue = player.stats[stat];
+            const upgradeCost = getStatUpgradeCost(baseValue);
+            return (
+              <div className="stat-upgrade" key={stat}>
+                <div>
+                  <h4>{label}</h4>
+                  <p className="stat-description">{description}</p>
+                  <p>Alap: {baseValue}</p>
+                  <p>Felszerelés: +{equipmentBonuses[stat]}</p>
+                  <p>Összesen: {effectiveStats[stat]}</p>
+                  <p>Fejlesztés ára: {upgradeCost} korona</p>
+                </div>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => onUpgradeStat(stat)}
+                  disabled={player.gold < upgradeCost}
+                >
+                  Fejlesztem
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
       {message && <p className="game-message">{message}</p>}

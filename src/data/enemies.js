@@ -2,12 +2,13 @@ const enemies = [
   {
     id: "apprentice-edvin",
     name: "Edvin tanonc",
-    level: 1,
     description: "Egy lelkes gyakorló, aki készen áll egy barátságos próbára.",
-    maxHealth: 65,
-    attack: 12,
-    xpReward: 30,
-    goldReward: 10,
+    baseHealth: 65,
+    baseAttack: 12,
+    healthPerLevel: 12,
+    attackPerLevel: 2,
+    baseXpReward: 30,
+    baseGoldReward: 10,
   },
 ];
 

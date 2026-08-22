@@ -2,8 +2,9 @@ import "./SpellsPage.css";
 
 const spellTypeLabels = {
   attack: "Támadó",
-  defense: "Védekező",
-  utility: "Hasznosító",
+  shield: "Védelmi",
+  heal: "Gyógyító",
+  utility: "Segédmágia",
 };
 
 function SpellsPage({ knownSpells, spells, player, manaStatus }) {
@@ -42,6 +43,18 @@ function SpellsPage({ knownSpells, spells, player, manaStatus }) {
                   <div>
                     <dt>Alaperő</dt>
                     <dd>{spell.basePower}</dd>
+                  </div>
+                )}
+                {spell.shieldAmount !== undefined && (
+                  <div>
+                    <dt>Pajzs ereje</dt>
+                    <dd>{spell.shieldAmount}</dd>
+                  </div>
+                )}
+                {spell.healAmount !== undefined && (
+                  <div>
+                    <dt>Gyógyítás</dt>
+                    <dd>{spell.healAmount}</dd>
                   </div>
                 )}
                 <div>
