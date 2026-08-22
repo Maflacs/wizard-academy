@@ -7,8 +7,8 @@ function HomePage() {
       <p className="eyebrow">I. szemeszter · Az iskola kapui kitárultak</p>
       <h2>Üdvözlünk, tanonc!</h2>
       <p className="lead">
-        Megérkezett a leveled. A Vadhajtás Akadémia az öreg tölgyfaajtón túl vár
-        rád.
+        Megérkezett a leveled. A Csillagtorony Akadémia az öreg tölgyfaajtón túl
+        vár rád.
       </p>
       <div className="notice parchment-panel">
         <div>

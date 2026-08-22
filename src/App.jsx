@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import items from "./data/items";
@@ -16,29 +16,107 @@ const initialPlayer = {
   energy: 100,
   maxEnergy: 100,
   inventory: [],
+  lastEnergyUpdate: Date.now(),
 };
+
+const energyRegenerationInterval = 5 * 60 * 1000;
 
 function loadPlayer() {
   // Loading one complete object keeps the localStorage contract easy to inspect.
   const savedPlayer = localStorage.getItem("player-state");
   if (savedPlayer) {
-    return { ...initialPlayer, ...JSON.parse(savedPlayer) };
+    const savedData = JSON.parse(savedPlayer);
+    const player = {
+      ...initialPlayer,
+      ...savedData,
+      lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
+    };
+    const updatedPlayer = updateEnergy(player, Date.now());
+    localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+    return updatedPlayer;
   }
 
-  return {
+  const player = {
     ...initialPlayer,
     name: localStorage.getItem("wizard-name") || initialPlayer.name,
   };
+  const updatedPlayer = updateEnergy(player, Date.now());
+  localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+  return updatedPlayer;
+}
+
+function updateEnergy(player, currentTime) {
+  if (player.energy >= player.maxEnergy) {
+    return player;
+  }
+
+  const elapsedTime = currentTime - player.lastEnergyUpdate;
+  const regeneratedEnergy = Math.floor(
+    elapsedTime / energyRegenerationInterval,
+  );
+  if (regeneratedEnergy < 1) {
+    return player;
+  }
+
+  const energy = Math.min(player.maxEnergy, player.energy + regeneratedEnergy);
+  return {
+    ...player,
+    energy,
+    // Advancing by completed intervals preserves partial progress to the next point.
+    lastEnergyUpdate:
+      energy >= player.maxEnergy
+        ? currentTime
+        : player.lastEnergyUpdate +
+          regeneratedEnergy * energyRegenerationInterval,
+  };
+}
+
+function getEnergyCountdown(player, currentTime) {
+  if (player.energy >= player.maxEnergy) {
+    return null;
+  }
+
+  const elapsedTime = currentTime - player.lastEnergyUpdate;
+  return Math.ceil(
+    (energyRegenerationInterval - (elapsedTime % energyRegenerationInterval)) /
+      1000,
+  );
+}
+
+function formatCountdown(seconds) {
+  const minutes = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
 }
 
 function App() {
   const [player, setPlayer] = useState(loadPlayer);
   const [message, setMessage] = useState("");
+  const [currentTime, setCurrentTime] = useState(Date.now);
 
   function persistPlayer(nextPlayer) {
     localStorage.setItem("player-state", JSON.stringify(nextPlayer));
     setPlayer(nextPlayer);
   }
+
+  useEffect(() => {
+    // The one-second timer animates the countdown; timestamps still decide when energy is granted.
+    const timerId = setInterval(() => {
+      const time = Date.now();
+      setCurrentTime(time);
+      setPlayer((currentPlayer) => {
+        const updatedPlayer = updateEnergy(currentPlayer, time);
+        if (updatedPlayer !== currentPlayer) {
+          localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+        }
+        return updatedPlayer;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, []);
 
   function saveName(name) {
     persistPlayer({ ...player, name });
@@ -91,6 +169,10 @@ function App() {
       energy: player.energy - lesson.energyCost,
       level: nextLevel,
       xp: nextXp,
+      lastEnergyUpdate:
+        player.energy >= player.maxEnergy
+          ? Date.now()
+          : player.lastEnergyUpdate,
     };
     persistPlayer(nextPlayer);
     setMessage(
@@ -99,6 +181,12 @@ function App() {
         : `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP`,
     );
   }
+
+  const energyCountdown = getEnergyCountdown(player, currentTime);
+  const energyStatus = {
+    countdown:
+      energyCountdown === null ? null : formatCountdown(energyCountdown),
+  };
 
   return (
     <BrowserRouter>
@@ -112,6 +200,7 @@ function App() {
                 player={player}
                 items={items}
                 onSaveName={saveName}
+                energyStatus={energyStatus}
               />
             }
           />
@@ -123,6 +212,7 @@ function App() {
                 player={player}
                 message={message}
                 onAttendLesson={attendLesson}
+                energyStatus={energyStatus}
               />
             }
           />

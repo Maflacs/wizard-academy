@@ -1,12 +1,24 @@
 import "./LessonsPage.css";
 
-function LessonsPage({ lessons, player, message, onAttendLesson }) {
+function LessonsPage({
+  lessons,
+  player,
+  message,
+  onAttendLesson,
+  energyStatus,
+}) {
   return (
     <section className="page">
       <p className="eyebrow">Az akadémia órarendje</p>
       <h2>Órák</h2>
       <p className="lead">
         Válassz egy tantárgyat, és szerezd meg a helyed a tudósok között.
+      </p>
+      <p className="lesson-energy">
+        Energia: {player.energy} / {player.maxEnergy}
+        {energyStatus.countdown
+          ? ` · Következő energia: ${energyStatus.countdown}`
+          : " · Az energiád teljesen feltöltődött."}
       </p>
       <div className="lesson-list">
         {lessons.map((lesson) => (

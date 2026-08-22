@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./CharacterPage.css";
 
-function CharacterPage({ player, items, onSaveName }) {
+function CharacterPage({ player, items, onSaveName, energyStatus }) {
   const [name, setName] = useState(player.name);
 
   function saveName(event) {
@@ -60,6 +60,15 @@ function CharacterPage({ player, items, onSaveName }) {
               </dd>
             </div>
           </dl>
+          {energyStatus.countdown ? (
+            <p className="energy-countdown">
+              Következő energia: {energyStatus.countdown}
+            </p>
+          ) : (
+            <p className="energy-countdown">
+              Az energiád teljesen feltöltődött.
+            </p>
+          )}
         </div>
         <div className="parchment-panel spellbook">
           <p className="eyebrow">Ismert varázsigék</p>
