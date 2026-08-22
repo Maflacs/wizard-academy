@@ -1,6 +1,12 @@
 import items from "../data/items";
 import "./ShopPage.css";
 
+const statLabels = {
+  magicPower: "Mágikus erő",
+  defense: "Védelem",
+  focus: "Fókusz",
+};
+
 function ShopPage({ player, message, onPurchaseItem }) {
   const formattedGold = new Intl.NumberFormat("hu-HU").format(player.gold);
 
@@ -16,6 +22,15 @@ function ShopPage({ player, message, onPurchaseItem }) {
             <span className="item-mark">{item.mark}</span>
             <h3>{item.name}</h3>
             <p>{item.description}</p>
+            {item.bonuses && Object.keys(item.bonuses).length > 0 && (
+              <div className="item-bonuses">
+                {Object.entries(item.bonuses).map(([stat, bonus]) => (
+                  <span key={stat}>
+                    +{bonus} {statLabels[stat]}
+                  </span>
+                ))}
+              </div>
+            )}
             <strong>
               {new Intl.NumberFormat("hu-HU").format(item.price)} korona
             </strong>

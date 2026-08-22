@@ -16,6 +16,16 @@ const initialPlayer = {
   energy: 100,
   maxEnergy: 100,
   inventory: [],
+  stats: {
+    magicPower: 5,
+    defense: 5,
+    focus: 5,
+  },
+  equipment: {
+    wand: null,
+    robe: null,
+    amulet: null,
+  },
   lastEnergyUpdate: Date.now(),
 };
 
@@ -29,6 +39,8 @@ function loadPlayer() {
     const player = {
       ...initialPlayer,
       ...savedData,
+      stats: { ...initialPlayer.stats, ...savedData.stats },
+      equipment: { ...initialPlayer.equipment, ...savedData.equipment },
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
     };
     const updatedPlayer = updateEnergy(player, Date.now());
@@ -149,6 +161,31 @@ function App() {
     setMessage(`${item.name} bekerült a táskádba.`);
   }
 
+  function equipItem(item) {
+    const ownsItem = player.inventory.some(
+      (inventoryItem) =>
+        inventoryItem.itemId === item.id && inventoryItem.quantity > 0,
+    );
+    if (item.type !== "equipment" || !ownsItem) {
+      setMessage("Ezt a tárgyat nem szerelheted fel.");
+      return;
+    }
+
+    persistPlayer({
+      ...player,
+      equipment: { ...player.equipment, [item.slot]: item.id },
+    });
+    setMessage(`${item.name} felszerelve.`);
+  }
+
+  function unequipItem(slot) {
+    persistPlayer({
+      ...player,
+      equipment: { ...player.equipment, [slot]: null },
+    });
+    setMessage("A tárgyat levetted.");
+  }
+
   function attendLesson(lesson) {
     if (player.energy < lesson.energyCost) {
       setMessage("Nincs elegendő energiád ehhez az órához.");
@@ -200,6 +237,9 @@ function App() {
                 player={player}
                 items={items}
                 onSaveName={saveName}
+                message={message}
+                onEquipItem={equipItem}
+                onUnequipItem={unequipItem}
                 energyStatus={energyStatus}
               />
             }
