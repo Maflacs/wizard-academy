@@ -15,6 +15,7 @@ function CharacterPage({
   onEquipItem,
   onUnequipItem,
   energyStatus,
+  manaStatus,
 }) {
   const [name, setName] = useState(player.name);
 
@@ -48,68 +49,67 @@ function CharacterPage({
     <section className="page">
       <p className="eyebrow">A játékos nyilvántartása</p>
       <h2>Karakter</h2>
-      <div className="two-column">
-        <div className="parchment-panel character-sheet">
-          <p className="eyebrow">Tanoncadatlap</p>
-          <form onSubmit={saveName}>
-            <label htmlFor="wizard-name">Név</label>
-            <input
-              id="wizard-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <button className="button" type="submit">
-              Név mentése
-            </button>
-          </form>
-          <dl className="stats">
-            <div>
-              <dt>Rend</dt>
-              <dd>Még nincs kijelölve</dd>
-            </div>
-            <div>
-              <dt>Szint</dt>
-              <dd>{player.level}</dd>
-            </div>
-            <div>
-              <dt>Tapasztalat</dt>
-              <dd>{player.xp} XP</dd>
-            </div>
-            <div>
-              <dt>Arany</dt>
-              <dd>{player.gold} korona</dd>
-            </div>
-            <div>
-              <dt>Energia</dt>
-              <dd>
-                {player.energy} / {player.maxEnergy}
-              </dd>
-            </div>
-          </dl>
-          {energyStatus.countdown ? (
-            <p className="energy-countdown">
-              Következő energia: {energyStatus.countdown}
-            </p>
-          ) : (
-            <p className="energy-countdown">
-              Az energiád teljesen feltöltődött.
-            </p>
-          )}
-        </div>
-        <div className="parchment-panel spellbook">
-          <p className="eyebrow">Ismert varázsigék</p>
-          <h3>Varázskönyv</h3>
-          <ul>
-            <li>✧ Fénygyújtás</li>
-            <li>✧ Forrasztó bűbáj</li>
-            <li>✧ Suttogó szél</li>
-          </ul>
-        </div>
+      <div className="parchment-panel character-sheet">
+        <p className="eyebrow">Tanoncadatlap</p>
+        <form onSubmit={saveName}>
+          <label htmlFor="wizard-name">Név</label>
+          <input
+            id="wizard-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <button className="button" type="submit">
+            Név mentése
+          </button>
+        </form>
+        <dl className="stats">
+          <div>
+            <dt>Rend</dt>
+            <dd>Még nincs kijelölve</dd>
+          </div>
+          <div>
+            <dt>Szint</dt>
+            <dd>{player.level}</dd>
+          </div>
+          <div>
+            <dt>Tapasztalat</dt>
+            <dd>{player.xp} XP</dd>
+          </div>
+          <div>
+            <dt>Arany</dt>
+            <dd>{player.gold} korona</dd>
+          </div>
+          <div>
+            <dt>Energia</dt>
+            <dd>
+              {player.energy} / {player.maxEnergy}
+            </dd>
+          </div>
+          <div>
+            <dt>Mana</dt>
+            <dd>
+              {player.mana} / {player.maxMana}
+            </dd>
+          </div>
+        </dl>
+        {energyStatus.countdown ? (
+          <p className="energy-countdown">
+            Következő energia: {energyStatus.countdown}
+          </p>
+        ) : (
+          <p className="energy-countdown">Az energiád teljesen feltöltődött.</p>
+        )}
+        {manaStatus.countdown ? (
+          <p className="energy-countdown">
+            Következő mana: {manaStatus.countdown}
+          </p>
+        ) : (
+          <p className="energy-countdown">A manád teljesen feltöltődött.</p>
+        )}
       </div>
       <div className="character-sections">
         <div className="parchment-panel stat-section">
-          <p className="eyebrow">A karakter tulajdonságai</p>
-          <h3>Hatékony értékek</h3>
+          <h3 className="eyebrow title">A karakter tulajdonságai</h3>
           <ul>
             <li>
               <span>Mágikus erő</span>
@@ -126,8 +126,7 @@ function CharacterPage({
           </ul>
         </div>
         <div className="parchment-panel equipment-section">
-          <p className="eyebrow">A felszerelés helyei</p>
-          <h3>Felszerelés</h3>
+          <h3 className="eyebrow title">Felszerelések</h3>
           <ul>
             {equippedItems.map((slot) => (
               <li key={slot.key}>
@@ -151,8 +150,7 @@ function CharacterPage({
       </div>
       {message && <p className="game-message">{message}</p>}
       <div className="parchment-panel inventory">
-        <p className="eyebrow">A tanonc táskája</p>
-        <h3>Felszerelés</h3>
+        <h3 className="eyebrow title">A táska tartalma</h3>
         {inventoryItems.length === 0 ? (
           <p className="inventory-empty">A táskád még üres.</p>
         ) : (

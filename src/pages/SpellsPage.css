@@ -1,0 +1,54 @@
+.spells-page .lead {
+  margin-bottom: 32px;
+}
+.spell-mana {
+  margin: -18px 0 28px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.spell-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+.spell-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.spell-card > p:not(.eyebrow) {
+  margin: 4px 0 10px;
+  color: var(--muted);
+}
+.spell-details {
+  display: grid;
+  gap: 8px;
+  margin: auto 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.spell-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.spell-details dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.spell-details dd {
+  margin: 0;
+  color: var(--red);
+  font-weight: bold;
+}
+.spellbook-empty {
+  padding: 24px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: rgba(255, 249, 226, 0.47);
+}
+@media (max-width: 800px) {
+  .spell-list {
+    grid-template-columns: 1fr;
+  }
+}

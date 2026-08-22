@@ -3,10 +3,12 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import items from "./data/items";
 import lessons from "./data/lessons";
+import spells from "./data/spells";
 import CharacterPage from "./pages/CharacterPage";
 import HomePage from "./pages/HomePage";
 import LessonsPage from "./pages/LessonsPage";
 import ShopPage from "./pages/ShopPage";
+import SpellsPage from "./pages/SpellsPage";
 
 const initialPlayer = {
   name: "Névtelen tanonc",
@@ -15,6 +17,9 @@ const initialPlayer = {
   gold: 25,
   energy: 100,
   maxEnergy: 100,
+  mana: 50,
+  maxMana: 50,
+  knownSpells: ["spark-bolt"],
   inventory: [],
   stats: {
     magicPower: 5,
@@ -27,9 +32,11 @@ const initialPlayer = {
     amulet: null,
   },
   lastEnergyUpdate: Date.now(),
+  lastManaUpdate: Date.now(),
 };
 
 const energyRegenerationInterval = 5 * 60 * 1000;
+const manaRegenerationInterval = 60 * 1000;
 
 function loadPlayer() {
   // Loading one complete object keeps the localStorage contract easy to inspect.
@@ -42,10 +49,13 @@ function loadPlayer() {
       stats: { ...initialPlayer.stats, ...savedData.stats },
       equipment: { ...initialPlayer.equipment, ...savedData.equipment },
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
+      lastManaUpdate: savedData.lastManaUpdate || Date.now(),
+      knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
     };
     const updatedPlayer = updateEnergy(player, Date.now());
-    localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
-    return updatedPlayer;
+    const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
+    localStorage.setItem("player-state", JSON.stringify(updatedManaPlayer));
+    return updatedManaPlayer;
   }
 
   const player = {
@@ -53,8 +63,9 @@ function loadPlayer() {
     name: localStorage.getItem("wizard-name") || initialPlayer.name,
   };
   const updatedPlayer = updateEnergy(player, Date.now());
-  localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
-  return updatedPlayer;
+  const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
+  localStorage.setItem("player-state", JSON.stringify(updatedManaPlayer));
+  return updatedManaPlayer;
 }
 
 function updateEnergy(player, currentTime) {
@@ -83,6 +94,29 @@ function updateEnergy(player, currentTime) {
   };
 }
 
+function updateMana(player, currentTime) {
+  if (player.mana >= player.maxMana) {
+    return player;
+  }
+
+  const elapsedTime = currentTime - player.lastManaUpdate;
+  const regeneratedMana = Math.floor(elapsedTime / manaRegenerationInterval);
+  if (regeneratedMana < 1) {
+    return player;
+  }
+
+  const mana = Math.min(player.maxMana, player.mana + regeneratedMana);
+  return {
+    ...player,
+    mana,
+    // Completed intervals advance the timestamp and preserve any partial minute.
+    lastManaUpdate:
+      mana >= player.maxMana
+        ? currentTime
+        : player.lastManaUpdate + regeneratedMana * manaRegenerationInterval,
+  };
+}
+
 function getEnergyCountdown(player, currentTime) {
   if (player.energy >= player.maxEnergy) {
     return null;
@@ -103,6 +137,18 @@ function formatCountdown(seconds) {
   return `${minutes}:${remainingSeconds}`;
 }
 
+function getManaCountdown(player, currentTime) {
+  if (player.mana >= player.maxMana) {
+    return null;
+  }
+
+  const elapsedTime = currentTime - player.lastManaUpdate;
+  return Math.ceil(
+    (manaRegenerationInterval - (elapsedTime % manaRegenerationInterval)) /
+      1000,
+  );
+}
+
 function App() {
   const [player, setPlayer] = useState(loadPlayer);
   const [message, setMessage] = useState("");
@@ -114,16 +160,20 @@ function App() {
   }
 
   useEffect(() => {
-    // The one-second timer animates the countdown; timestamps still decide when energy is granted.
+    // The one-second timer updates the UI; timestamps still decide when mana or energy is granted.
     const timerId = setInterval(() => {
       const time = Date.now();
       setCurrentTime(time);
       setPlayer((currentPlayer) => {
         const updatedPlayer = updateEnergy(currentPlayer, time);
-        if (updatedPlayer !== currentPlayer) {
-          localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+        const updatedManaPlayer = updateMana(updatedPlayer, time);
+        if (updatedManaPlayer !== currentPlayer) {
+          localStorage.setItem(
+            "player-state",
+            JSON.stringify(updatedManaPlayer),
+          );
         }
-        return updatedPlayer;
+        return updatedManaPlayer;
       });
     }, 1000);
 
@@ -220,9 +270,13 @@ function App() {
   }
 
   const energyCountdown = getEnergyCountdown(player, currentTime);
+  const manaCountdown = getManaCountdown(player, currentTime);
   const energyStatus = {
     countdown:
       energyCountdown === null ? null : formatCountdown(energyCountdown),
+  };
+  const manaStatus = {
+    countdown: manaCountdown === null ? null : formatCountdown(manaCountdown),
   };
 
   return (
@@ -241,6 +295,7 @@ function App() {
                 onEquipItem={equipItem}
                 onUnequipItem={unequipItem}
                 energyStatus={energyStatus}
+                manaStatus={manaStatus}
               />
             }
           />
@@ -253,6 +308,17 @@ function App() {
                 message={message}
                 onAttendLesson={attendLesson}
                 energyStatus={energyStatus}
+              />
+            }
+          />
+          <Route
+            path="/spells"
+            element={
+              <SpellsPage
+                knownSpells={player.knownSpells}
+                spells={spells}
+                player={player}
+                manaStatus={manaStatus}
               />
             }
           />
