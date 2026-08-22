@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
+import enemies from "./data/enemies";
 import items from "./data/items";
 import lessons from "./data/lessons";
 import spells from "./data/spells";
@@ -9,6 +10,7 @@ import HomePage from "./pages/HomePage";
 import LessonsPage from "./pages/LessonsPage";
 import ShopPage from "./pages/ShopPage";
 import SpellsPage from "./pages/SpellsPage";
+import DuelPage from "./pages/DuelPage";
 
 const initialPlayer = {
   name: "Névtelen tanonc",
@@ -17,6 +19,8 @@ const initialPlayer = {
   gold: 25,
   energy: 100,
   maxEnergy: 100,
+  health: 100,
+  maxHealth: 100,
   mana: 50,
   maxMana: 50,
   knownSpells: ["spark-bolt"],
@@ -48,6 +52,8 @@ function loadPlayer() {
       ...savedData,
       stats: { ...initialPlayer.stats, ...savedData.stats },
       equipment: { ...initialPlayer.equipment, ...savedData.equipment },
+      health: savedData.health ?? initialPlayer.health,
+      maxHealth: savedData.maxHealth ?? initialPlayer.maxHealth,
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
       lastManaUpdate: savedData.lastManaUpdate || Date.now(),
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
@@ -269,6 +275,27 @@ function App() {
     );
   }
 
+  function awardDuelRewards(enemy) {
+    let nextLevel = player.level;
+    let nextXp = player.xp + enemy.xpReward;
+    while (nextXp >= 100) {
+      nextXp -= 100;
+      nextLevel += 1;
+    }
+
+    // Rewards are persisted centrally so the duel page only controls temporary combat state.
+    persistPlayer({
+      ...player,
+      level: nextLevel,
+      xp: nextXp,
+      gold: player.gold + enemy.goldReward,
+    });
+    return {
+      leveledUp: nextLevel > player.level,
+      newLevel: nextLevel,
+    };
+  }
+
   const energyCountdown = getEnergyCountdown(player, currentTime);
   const manaCountdown = getManaCountdown(player, currentTime);
   const energyStatus = {
@@ -329,6 +356,18 @@ function App() {
                 player={player}
                 message={message}
                 onPurchaseItem={purchaseItem}
+              />
+            }
+          />
+          <Route
+            path="/duel"
+            element={
+              <DuelPage
+                player={player}
+                items={items}
+                spells={spells}
+                enemy={enemies[0]}
+                onAwardRewards={awardDuelRewards}
               />
             }
           />

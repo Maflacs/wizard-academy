@@ -1,4 +1,5 @@
 import { useState } from "react";
+import getEffectiveStats from "../utils/playerStats";
 import "./CharacterPage.css";
 
 const equipmentSlots = [
@@ -36,14 +37,7 @@ function CharacterPage({
     ...slot,
     item: items.find((item) => item.id === player.equipment[slot.key]),
   }));
-  const effectiveStats = { ...player.stats };
-  equippedItems.forEach(({ item }) => {
-    if (item?.bonuses) {
-      Object.entries(item.bonuses).forEach(([stat, bonus]) => {
-        effectiveStats[stat] += bonus;
-      });
-    }
-  });
+  const effectiveStats = getEffectiveStats(player, items);
 
   return (
     <section className="page">
