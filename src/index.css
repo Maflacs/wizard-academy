@@ -1,3 +1,23 @@
-:root { font: 16px/1.5 Georgia, 'Times New Roman', serif; color: #332a24; background: #1f1714; font-synthesis: none; text-rendering: optimizeLegibility; }
-body { margin: 0; min-width: 320px; }
-#root { min-height: 100svh; }
+:root {
+  box-sizing: border-box;
+  font:
+    16px/1.5 Georgia,
+    "Times New Roman",
+    serif;
+  color: #332a24;
+  background: #1f1714;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+body {
+  min-width: 320px;
+  margin: 0;
+}
+#root {
+  min-height: 100svh;
+}

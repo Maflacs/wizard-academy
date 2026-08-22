@@ -1,0 +1,25 @@
+.lesson-list {
+  display: grid;
+  gap: 13px;
+  margin-top: 35px;
+}
+.lesson {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.lesson p:not(.eyebrow) {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.lesson-reward {
+  color: var(--red) !important;
+  font-size: 14px;
+}
+@media (max-width: 700px) {
+  .lesson {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

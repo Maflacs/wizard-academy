@@ -90,9 +90,6 @@ main {
   margin: auto;
   padding: 76px 44px;
 }
-.home-page {
-  text-align: center;
-}
 .lead {
   max-width: 560px;
   margin: 15px auto 38px;
@@ -104,20 +101,6 @@ main {
   border: 1px solid var(--line);
   background: rgba(255, 249, 226, 0.47);
   box-shadow: inset 0 0 24px rgba(115, 81, 30, 0.09);
-}
-.notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin: 42px auto 32px;
-  max-width: 730px;
-  text-align: left;
-  border-left: 5px solid var(--red);
-}
-.notice p:not(.eyebrow) {
-  margin-top: 8px;
-  color: var(--muted);
 }
 .button {
   display: inline-block;
@@ -135,121 +118,19 @@ main {
 .button:hover {
   background: #9b3b35;
 }
-.quick-links {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  max-width: 730px;
-  margin: auto;
-  text-align: left;
+.button:disabled {
+  border-color: #8d8069;
+  color: #eee2c3;
+  background: #9a8d74;
+  cursor: not-allowed;
 }
-.quick-link {
-  display: grid;
-  grid-template-columns: 35px 1fr;
-  padding: 18px;
-  color: var(--ink);
-  border-top: 1px solid var(--line);
-  text-decoration: none;
-}
-.quick-link:hover {
-  background: rgba(196, 168, 112, 0.22);
-}
-.quick-link span {
-  grid-row: span 2;
+.game-message {
+  margin: 22px 0 0;
+  padding: 13px 16px;
+  border-left: 4px solid var(--gold);
   color: var(--red);
-  font-size: 23px;
-}
-.quick-link strong {
-  font-family: Cinzel, serif;
-}
-.quick-link small {
-  color: var(--muted);
-}
-.two-column,
-.shop-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
-  margin-top: 35px;
-}
-.character-sheet form {
-  display: grid;
-  gap: 8px;
-  margin-top: 20px;
-}
-.character-sheet label {
-  color: var(--muted);
-  font-size: 14px;
-}
-.character-sheet input {
-  padding: 11px;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  background: #f4e9c9;
-  font:
-    16px Georgia,
-    serif;
-}
-.character-sheet .button {
-  justify-self: start;
-  margin-top: 6px;
-}
-.stats {
-  display: flex;
-  gap: 20px;
-  margin: 30px 0 0;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-.stats div {
-  display: grid;
-  gap: 3px;
-}
-.stats dt {
-  color: var(--muted);
-  font-size: 12px;
-}
-.stats dd {
-  margin: 0;
+  background: rgba(255, 249, 226, 0.65);
   font-weight: bold;
-}
-.spellbook ul {
-  padding: 0;
-  list-style: none;
-  line-height: 2.2;
-  color: var(--red);
-}
-.lesson-list {
-  display: grid;
-  gap: 13px;
-  margin-top: 35px;
-}
-.lesson {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.lesson p:not(.eyebrow),
-.item p {
-  margin: 6px 0 0;
-  color: var(--muted);
-}
-.item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-}
-.item-mark {
-  color: var(--red);
-  font-size: 30px;
-}
-.item strong {
-  color: var(--red);
-}
-.item .button {
-  margin-top: auto;
 }
 footer {
   padding: 20px;
@@ -274,18 +155,5 @@ footer {
   }
   .page {
     padding: 50px 20px;
-  }
-  .notice,
-  .lesson {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .quick-links,
-  .two-column,
-  .shop-grid {
-    grid-template-columns: 1fr;
-  }
-  .stats {
-    flex-wrap: wrap;
   }
 }

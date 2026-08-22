@@ -1,0 +1,61 @@
+.two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 35px;
+}
+.character-sheet form {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+.character-sheet label {
+  color: var(--muted);
+  font-size: 14px;
+}
+.character-sheet input {
+  padding: 11px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: #f4e9c9;
+  font:
+    16px Georgia,
+    serif;
+}
+.character-sheet .button {
+  justify-self: start;
+  margin-top: 6px;
+}
+.stats {
+  display: flex;
+  gap: 20px;
+  margin: 30px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.stats div {
+  display: grid;
+  gap: 3px;
+}
+.stats dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.stats dd {
+  margin: 0;
+  font-weight: bold;
+}
+.spellbook ul {
+  padding: 0;
+  list-style: none;
+  line-height: 2.2;
+  color: var(--red);
+}
+@media (max-width: 700px) {
+  .two-column {
+    grid-template-columns: 1fr;
+  }
+  .stats {
+    flex-wrap: wrap;
+  }
+}
