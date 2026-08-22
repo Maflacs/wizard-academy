@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
+import items from "./data/items";
 import lessons from "./data/lessons";
 import CharacterPage from "./pages/CharacterPage";
 import HomePage from "./pages/HomePage";
@@ -14,6 +15,7 @@ const initialPlayer = {
   gold: 25,
   energy: 100,
   maxEnergy: 100,
+  inventory: [],
 };
 
 function loadPlayer() {
@@ -41,6 +43,32 @@ function App() {
   function saveName(name) {
     persistPlayer({ ...player, name });
     localStorage.setItem("wizard-name", name);
+  }
+
+  function purchaseItem(item) {
+    if (player.gold < item.price) {
+      setMessage("Nincs elegendő aranyad ehhez a tárgyhoz.");
+      return;
+    }
+
+    // Store only item IDs and quantities so static item details remain in data files.
+    const existingItem = player.inventory.find(
+      (inventoryItem) => inventoryItem.itemId === item.id,
+    );
+    const nextInventory = existingItem
+      ? player.inventory.map((inventoryItem) =>
+          inventoryItem.itemId === item.id
+            ? { ...inventoryItem, quantity: inventoryItem.quantity + 1 }
+            : inventoryItem,
+        )
+      : [...player.inventory, { itemId: item.id, quantity: 1 }];
+
+    persistPlayer({
+      ...player,
+      gold: player.gold - item.price,
+      inventory: nextInventory,
+    });
+    setMessage(`${item.name} bekerült a táskádba.`);
   }
 
   function attendLesson(lesson) {
@@ -79,7 +107,13 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route
             path="/character"
-            element={<CharacterPage player={player} onSaveName={saveName} />}
+            element={
+              <CharacterPage
+                player={player}
+                items={items}
+                onSaveName={saveName}
+              />
+            }
           />
           <Route
             path="/lessons"
@@ -92,7 +126,16 @@ function App() {
               />
             }
           />
-          <Route path="/shop" element={<ShopPage />} />
+          <Route
+            path="/shop"
+            element={
+              <ShopPage
+                player={player}
+                message={message}
+                onPurchaseItem={purchaseItem}
+              />
+            }
+          />
         </Routes>
       </Layout>
     </BrowserRouter>

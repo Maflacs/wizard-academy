@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./CharacterPage.css";
 
-function CharacterPage({ player, onSaveName }) {
+function CharacterPage({ player, items, onSaveName }) {
   const [name, setName] = useState(player.name);
 
   function saveName(event) {
@@ -10,6 +10,13 @@ function CharacterPage({ player, onSaveName }) {
     onSaveName(savedName);
     setName(savedName);
   }
+
+  const inventoryItems = player.inventory
+    .map((inventoryItem) => ({
+      ...inventoryItem,
+      item: items.find((item) => item.id === inventoryItem.itemId),
+    }))
+    .filter((inventoryItem) => inventoryItem.item);
 
   return (
     <section className="page">
@@ -63,6 +70,22 @@ function CharacterPage({ player, onSaveName }) {
             <li>✧ Suttogó szél</li>
           </ul>
         </div>
+      </div>
+      <div className="parchment-panel inventory">
+        <p className="eyebrow">A tanonc táskája</p>
+        <h3>Felszerelés</h3>
+        {inventoryItems.length === 0 ? (
+          <p className="inventory-empty">A táskád még üres.</p>
+        ) : (
+          <ul>
+            {inventoryItems.map((inventoryItem) => (
+              <li key={inventoryItem.itemId}>
+                <span>{inventoryItem.item.name}</span>
+                <strong>{inventoryItem.quantity} db</strong>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );

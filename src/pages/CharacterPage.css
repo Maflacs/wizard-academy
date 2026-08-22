@@ -51,6 +51,30 @@
   line-height: 2.2;
   color: var(--red);
 }
+.inventory {
+  margin-top: 22px;
+}
+.inventory ul {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.inventory li {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.inventory li strong {
+  color: var(--red);
+}
+.inventory-empty {
+  margin: 16px 0 0;
+  color: var(--muted);
+}
 @media (max-width: 700px) {
   .two-column {
     grid-template-columns: 1fr;
