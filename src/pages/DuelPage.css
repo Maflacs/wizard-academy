@@ -6,6 +6,9 @@
   color: var(--muted);
   font-size: 14px;
 }
+.auto-button {
+  margin-top: 20px;
+}
 .duelants {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

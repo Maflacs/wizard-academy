@@ -4,4 +4,23 @@ function applyDamageVariance(baseDamage) {
   return Math.max(1, Math.round(baseDamage * multiplier));
 }
 
+function chooseEnemyAction(enemy) {
+  const actions = enemy.actions?.length
+    ? enemy.actions
+    : [{ type: "attack", weight: 100 }];
+  const totalWeight = actions.reduce((total, action) => total + action.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  // Weighted actions keep enemy behavior varied without introducing an AI system.
+  for (const action of actions) {
+    roll -= action.weight;
+    if (roll < 0) {
+      return action;
+    }
+  }
+
+  return actions[actions.length - 1];
+}
+
+export { chooseEnemyAction };
 export default applyDamageVariance;

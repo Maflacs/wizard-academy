@@ -65,6 +65,10 @@ function loadPlayer() {
         savedData.health ?? initialPlayer.health,
         getMaxHealthForLevel(savedData.level || initialPlayer.level),
       ),
+      mana: Math.min(
+        savedData.mana ?? initialPlayer.mana,
+        getMaxManaForLevel(savedData.level || initialPlayer.level),
+      ),
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
       lastManaUpdate: savedData.lastManaUpdate || Date.now(),
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
@@ -437,7 +441,7 @@ function App() {
                 player={player}
                 items={items}
                 spells={spells}
-                enemy={enemies[0]}
+                enemies={enemies}
                 onAwardRewards={awardDuelRewards}
               />
             }

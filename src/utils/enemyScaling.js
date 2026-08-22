@@ -1,9 +1,6 @@
 function createScaledEnemy(baseEnemy, playerLevel) {
-  // Generate one level for the new duel, then derive every combat value from base data.
-  const minimumLevel = Math.max(1, playerLevel - 1);
-  const maximumLevel = playerLevel + 1;
-  const level =
-    minimumLevel + Math.floor(Math.random() * (maximumLevel - minimumLevel + 1));
+  // Generate one exact player-level opponent, then derive every value from base data.
+  const level = playerLevel;
 
   return {
     ...baseEnemy,
