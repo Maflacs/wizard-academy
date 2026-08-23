@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import getEffectiveStats from "../utils/playerStats";
-import applyDamageVariance, { chooseEnemyAction } from "../utils/combat";
+import applyDamageVariance, {
+  applyShield,
+  chooseEnemyAction,
+  resolveShieldDamage,
+} from "../utils/combat";
 import createScaledEnemy from "../utils/enemyScaling";
 import {
   getMaxHealthForLevel,
@@ -27,6 +31,7 @@ function createDuelState(enemy, playerLevel, playerHealth) {
     maxHealth: getMaxHealthForLevel(playerLevel),
     maxMana: getMaxManaForLevel(playerLevel),
     combatShield: 0,
+    combatShieldName: null,
     enemyShield: 0,
   };
 }
@@ -46,7 +51,7 @@ function getAttackDamage(spell, effectiveStats) {
   };
 }
 
-function getUsablePlayerActions(player, spells, state) {
+function getUsablePlayerActions(player, spells, state, automatic = false) {
   const preparedActions = [];
   const preparedSpellIds = player.preparedSpells || [];
   spells.forEach((spell) => {
@@ -57,9 +62,17 @@ function getUsablePlayerActions(player, spells, state) {
       state.combatMana < spell.manaCost
     )
       return;
-    if (spell.type === "shield" && state.combatShield < spell.shieldAmount)
+    if (
+      spell.type === "shield" &&
+      (automatic
+        ? state.combatShield <= spell.shieldAmount * 0.5
+        : state.combatShield < spell.shieldAmount)
+    )
       preparedActions.push(spell);
-    if (spell.type === "heal" && state.combatHealth < state.maxHealth * 0.75)
+    if (
+      spell.type === "heal" &&
+      state.combatHealth < (automatic ? state.maxHealth * 0.75 : state.maxHealth)
+    )
       preparedActions.push(spell);
     if (spell.type === "attack") preparedActions.push(spell);
   });
@@ -94,15 +107,36 @@ function performEnemyAction(state, effectiveStats, addLog) {
     1,
     applyDamageVariance(attack) - effectiveStats.defense,
   );
-  const absorbed = Math.min(state.combatShield, incoming);
-  state.combatShield -= absorbed;
-  state.combatHealth = Math.max(0, state.combatHealth - incoming + absorbed);
+  if (state.combatShield > 0) {
+    const shieldName = state.combatShieldName || "Védőpajzsod";
+    const result = resolveShieldDamage(state.combatShield, incoming);
+    state.combatShield = result.remainingShield;
+    state.combatHealth = Math.max(0, state.combatHealth - result.healthDamage);
+    addLog(
+      result.remainingShield > 0
+        ? `${shieldName} ${result.absorbed} sebzést felfogott.`
+        : `${shieldName} ${result.absorbed} sebzést felfogott és szertefoszlott.`,
+    );
+    if (result.healthDamage > 0) {
+      addLog(
+        `${state.scaledEnemy.name}${heavy ? " pusztító csapása" : " támadása"} ${result.healthDamage} életerőt sebzett.`,
+      );
+    } else {
+      addLog(
+        result.remainingShield > 0
+          ? `A támadás nem jutott át a pajzson. Maradék pajzs: ${result.remainingShield}.`
+          : "A támadás nem jutott át a pajzson.",
+      );
+    }
+    if (result.remainingShield === 0) state.combatShieldName = null;
+    return;
+  }
+  state.combatHealth = Math.max(0, state.combatHealth - incoming);
   addLog(
     heavy
-      ? `${state.scaledEnemy.name} pusztító csapása ${incoming - absorbed} sebzést okozott.`
-      : `${state.scaledEnemy.name} ${incoming - absorbed} sebzést okozott.`,
+      ? `${state.scaledEnemy.name} pusztító csapása ${incoming} életerőt sebzett.`
+      : `${state.scaledEnemy.name} támadása ${incoming} életerőt sebzett.`,
   );
-  if (absorbed > 0) addLog(`A védőpajzsod ${absorbed} sebzést felfogott.`);
 }
 
 function simulateDuel(player, spells, items, duelState) {
@@ -110,11 +144,11 @@ function simulateDuel(player, spells, items, duelState) {
   const effectiveStats = getEffectiveStats(player, items);
   const log = [];
   const addLog = (entry) => {
-    if (log.length < 8) log.push(entry);
+    log.push(entry);
   };
 
   for (let turn = 0; turn < maxAutoTurns; turn += 1) {
-    const actions = getUsablePlayerActions(player, spells, state);
+    const actions = getUsablePlayerActions(player, spells, state, true);
     const action = chooseRandom(actions);
     state.combatMana -= action.manaCost;
     if (action.type === "attack" || action.id === basicAttack.id) {
@@ -125,8 +159,14 @@ function simulateDuel(player, spells, items, duelState) {
       state.enemyHealth = Math.max(0, state.enemyHealth - damage + blocked);
       addLog(`${action.name} ${damage} sebzést okozott.`);
     } else if (action.type === "shield") {
-      state.combatShield += action.shieldAmount;
-      addLog(`${action.name} ${action.shieldAmount} pajzsot adott.`);
+      const hadShield = state.combatShield > 0;
+      state.combatShield = applyShield(state.combatShield, action);
+      state.combatShieldName = action.name;
+      addLog(
+        hadShield
+          ? `Újra megerősítetted a ${action.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
+          : `${action.name} varázslatot idéztél. Pajzsod ereje: ${state.combatShield}.`,
+      );
     } else if (action.type === "heal") {
       const healed = Math.min(
         action.healAmount,
@@ -251,7 +291,9 @@ function DuelPage({
       duel.combatMana < spell.manaCost ||
       (spell.id !== basicAttack.id &&
         (!player.knownSpells.includes(spell.id) ||
-          player.level < spell.requiredLevel))
+          player.level < spell.requiredLevel)) ||
+      (spell.type === "shield" && duel.combatShield >= spell.shieldAmount) ||
+      (spell.type === "heal" && duel.combatHealth >= combatMaxHealth)
     )
       return;
     const nextDuel = { ...duel, combatMana: duel.combatMana - spell.manaCost };
@@ -268,9 +310,13 @@ function DuelPage({
         `${spell.name} varázslatot használtál, és ${damage} sebzést okoztál.`,
       );
     } else if (spell.type === "shield") {
-      nextDuel.combatShield += spell.shieldAmount;
+      const hadShield = nextDuel.combatShield > 0;
+      nextDuel.combatShield = applyShield(nextDuel.combatShield, spell);
+      nextDuel.combatShieldName = spell.name;
       addLog(
-        `${spell.name}et idéztél, és ${spell.shieldAmount} pajzsot kaptál.`,
+        hadShield
+          ? `Újra megerősítetted a ${spell.name} varázslatot. Pajzsod ereje: ${nextDuel.combatShield}.`
+          : `${spell.name} varázslatot idéztél. Pajzsod ereje: ${nextDuel.combatShield}.`,
       );
     } else if (spell.type === "heal") {
       const healed = Math.min(
@@ -380,10 +426,20 @@ function DuelPage({
                     className="button"
                     type="button"
                     onClick={() => castSpell(spell)}
-                    disabled={duel.combatMana < spell.manaCost}
+                    disabled={
+                      duel.combatMana < spell.manaCost ||
+                      (spell.type === "shield" &&
+                        duel.combatShield >= spell.shieldAmount) ||
+                      (spell.type === "heal" &&
+                        duel.combatHealth >= combatMaxHealth)
+                    }
                   >
                     Varázslás
                   </button>
+                  {spell.type === "shield" &&
+                    duel.combatShield >= spell.shieldAmount && (
+                      <small>A pajzsod már teljes erejű.</small>
+                    )}
                 </article>
               ))}
               {showFallback && (

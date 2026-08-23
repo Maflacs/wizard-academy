@@ -4,7 +4,7 @@ import { getMaxManaForLevel } from "../utils/playerProgression";
 
 const spellTypeLabels = {
   attack: "Támadó",
-  shield: "Védelmi",
+  shield: "Pajzs",
   heal: "Gyógyító",
   utility: "Segédmágia",
 };
@@ -74,6 +74,10 @@ function SpellsPage({
               <p>{spell.description}</p>
               <dl className="spell-details">
                 <div>
+                  <dt>Típus</dt>
+                  <dd>{spellTypeLabels[spell.type]}</dd>
+                </div>
+                <div>
                   <dt>Manaigény</dt>
                   <dd>{spell.manaCost}</dd>
                 </div>
@@ -100,6 +104,24 @@ function SpellsPage({
                   <dd>{spell.requiredLevel}</dd>
                 </div>
               </dl>
+              {spell.type === "shield" && (
+                <div className="shield-mechanics">
+                  <p>
+                    <strong>Időtartam:</strong> amíg a pajzs el nem fogy.
+                  </p>
+                  <p>
+                    <strong>Sebzésfelfogás:</strong> a Védelem után fennmaradó
+                    sebzést fogja fel.
+                  </p>
+                  <p>
+                    <strong>Halmozódás:</strong> nem.
+                  </p>
+                  <p>
+                    <strong>Újravarázslás:</strong> a sérült pajzsot legfeljebb
+                    a varázslat teljes pajzserősségéig tölti vissza.
+                  </p>
+                </div>
+              )}
               {preparedSpells.includes(spell.id) ? (
                 <button
                   className="text-button"

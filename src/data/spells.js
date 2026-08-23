@@ -12,11 +12,12 @@ const spells = [
   {
     id: "protective-shell",
     name: "Védőburok",
-    description: "Rövid időre mágikus pajzsot von a varázsló köré.",
+    description:
+      "Mágikus pajzsot von köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy. A pajzs nem halmozódik.",
     manaCost: 10,
-    basePower: 10,
+    shieldAmount: 10,
     requiredLevel: 1,
-    type: "defense",
+    type: "shield",
   },
   {
     id: "glow-orb",
@@ -65,7 +66,8 @@ const spells = [
   {
     id: "guardian-shield",
     name: "Őrzőpajzs",
-    description: "Mágikus pajzsot von köréd, amely elnyeli a következő támadások erejét.",
+    description:
+      "Mágikus pajzsot von köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy. A pajzs nem halmozódik.",
     manaCost: 10,
     shieldAmount: 10,
     requiredLevel: 1,

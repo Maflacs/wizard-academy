@@ -22,5 +22,18 @@ function chooseEnemyAction(enemy) {
   return actions[actions.length - 1];
 }
 
-export { chooseEnemyAction };
+function applyShield(currentShield, spell) {
+  return Math.max(currentShield, spell.shieldAmount);
+}
+
+function resolveShieldDamage(currentShield, incomingDamage) {
+  const absorbed = Math.min(currentShield, incomingDamage);
+  return {
+    absorbed,
+    remainingShield: currentShield - absorbed,
+    healthDamage: incomingDamage - absorbed,
+  };
+}
+
+export { applyShield, chooseEnemyAction, resolveShieldDamage };
 export default applyDamageVariance;
