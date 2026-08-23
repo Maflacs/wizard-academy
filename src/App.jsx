@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import enemies from "./data/enemies";
@@ -13,12 +13,9 @@ import SpellsPage from "./pages/SpellsPage";
 import DuelPage from "./pages/DuelPage";
 import QuestsPage from "./pages/QuestsPage";
 import quests from "./data/quests";
-import { getXpRequiredForLevel } from "./utils/leveling";
-import {
-  getMaxHealthForLevel,
-  getMaxManaForLevel,
-} from "./utils/playerProgression";
-import { getQuestProgress } from "./utils/quests";
+import { processExperience } from "./utils/leveling";
+import { getMaxHealthForLevel } from "./utils/playerProgression";
+import { getQuestProgress, isExamReady, isQuestUnlocked } from "./utils/quests";
 import getStatUpgradeCost from "./utils/statUpgrades";
 
 const initialPlayer = {
@@ -28,10 +25,7 @@ const initialPlayer = {
   gold: 25,
   energy: 100,
   maxEnergy: 100,
-  health: 100,
-  maxHealth: 100,
-  mana: 50,
-  maxMana: 50,
+  health: 140,
   knownSpells: ["spark-bolt"],
   inventory: [],
   stats: {
@@ -45,7 +39,6 @@ const initialPlayer = {
     amulet: null,
   },
   lastEnergyUpdate: Date.now(),
-  lastManaUpdate: Date.now(),
   lessonProgress: {},
   progress: {
     duelWins: 0,
@@ -53,33 +46,35 @@ const initialPlayer = {
     statUpgrades: 0,
   },
   claimedQuests: [],
+  completedMilestones: [],
 };
 
 const energyRegenerationInterval = 5 * 60 * 1000;
-const manaRegenerationInterval = 60 * 1000;
 
 function loadPlayer() {
   // Loading one complete object keeps the localStorage contract easy to inspect.
   const savedPlayer = localStorage.getItem("player-state");
   if (savedPlayer) {
     const savedData = JSON.parse(savedPlayer);
+    // Drop obsolete mana regeneration fields while preserving all gameplay progress.
+    const {
+      mana: _mana,
+      maxMana: _maxMana,
+      lastManaUpdate: _lastManaUpdate,
+      ...savedFields
+    } = savedData;
     const player = {
       ...initialPlayer,
-      ...savedData,
+      ...savedFields,
       maxHealth: getMaxHealthForLevel(savedData.level || initialPlayer.level),
-      maxMana: getMaxManaForLevel(savedData.level || initialPlayer.level),
       stats: { ...initialPlayer.stats, ...savedData.stats },
       equipment: { ...initialPlayer.equipment, ...savedData.equipment },
       health: Math.min(
-        savedData.health ?? initialPlayer.health,
+        savedData.health ??
+          getMaxHealthForLevel(savedData.level || initialPlayer.level),
         getMaxHealthForLevel(savedData.level || initialPlayer.level),
       ),
-      mana: Math.min(
-        savedData.mana ?? initialPlayer.mana,
-        getMaxManaForLevel(savedData.level || initialPlayer.level),
-      ),
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
-      lastManaUpdate: savedData.lastManaUpdate || Date.now(),
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
       lessonProgress: {
         ...initialPlayer.lessonProgress,
@@ -89,11 +84,13 @@ function loadPlayer() {
       claimedQuests: Array.isArray(savedData.claimedQuests)
         ? savedData.claimedQuests
         : initialPlayer.claimedQuests,
+      completedMilestones: Array.isArray(savedData.completedMilestones)
+        ? savedData.completedMilestones
+        : initialPlayer.completedMilestones,
     };
     const updatedPlayer = updateEnergy(player, Date.now());
-    const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
-    localStorage.setItem("player-state", JSON.stringify(updatedManaPlayer));
-    return updatedManaPlayer;
+    localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+    return updatedPlayer;
   }
 
   const player = {
@@ -101,9 +98,8 @@ function loadPlayer() {
     name: localStorage.getItem("wizard-name") || initialPlayer.name,
   };
   const updatedPlayer = updateEnergy(player, Date.now());
-  const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
-  localStorage.setItem("player-state", JSON.stringify(updatedManaPlayer));
-  return updatedManaPlayer;
+  localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
+  return updatedPlayer;
 }
 
 function updateEnergy(player, currentTime) {
@@ -132,29 +128,6 @@ function updateEnergy(player, currentTime) {
   };
 }
 
-function updateMana(player, currentTime) {
-  if (player.mana >= player.maxMana) {
-    return player;
-  }
-
-  const elapsedTime = currentTime - player.lastManaUpdate;
-  const regeneratedMana = Math.floor(elapsedTime / manaRegenerationInterval);
-  if (regeneratedMana < 1) {
-    return player;
-  }
-
-  const mana = Math.min(player.maxMana, player.mana + regeneratedMana);
-  return {
-    ...player,
-    mana,
-    // Completed intervals advance the timestamp and preserve any partial minute.
-    lastManaUpdate:
-      mana >= player.maxMana
-        ? currentTime
-        : player.lastManaUpdate + regeneratedMana * manaRegenerationInterval,
-  };
-}
-
 function getEnergyCountdown(player, currentTime) {
   if (player.energy >= player.maxEnergy) {
     return null;
@@ -175,57 +148,46 @@ function formatCountdown(seconds) {
   return `${minutes}:${remainingSeconds}`;
 }
 
-function getManaCountdown(player, currentTime) {
-  if (player.mana >= player.maxMana) {
-    return null;
-  }
-
-  const elapsedTime = currentTime - player.lastManaUpdate;
-  return Math.ceil(
-    (manaRegenerationInterval - (elapsedTime % manaRegenerationInterval)) /
-      1000,
-  );
-}
-
 function App() {
   const [player, setPlayer] = useState(loadPlayer);
-  const [message, setMessage] = useState("");
+  const [notification, setNotification] = useState(null);
+  const notificationId = useRef(0);
   const [currentTime, setCurrentTime] = useState(Date.now);
+
+  function notify(message, type = "info") {
+    notificationId.current += 1;
+    setNotification({
+      id: notificationId.current,
+      type,
+      message,
+      onDismiss: () => setNotification(null),
+    });
+  }
+
+  function notifyLevelUp(progression, suffix = "") {
+    if (!progression.leveledUp) return;
+    notify(
+      `Szintet léptél! Elérted a(z) ${progression.newLevel}. szintet. Életerőd és energiád teljesen feltöltődött.${suffix}`,
+      "levelUp",
+    );
+  }
 
   function persistPlayer(nextPlayer) {
     localStorage.setItem("player-state", JSON.stringify(nextPlayer));
     setPlayer(nextPlayer);
   }
 
-  function getLevelProgression(nextLevel, nextXp) {
-    const previousMaxMana = getMaxManaForLevel(player.level);
-    const nextMaxMana = getMaxManaForLevel(nextLevel);
-    const manaIncrease = nextMaxMana - previousMaxMana;
-    return {
-      level: nextLevel,
-      xp: nextXp,
-      maxHealth: getMaxHealthForLevel(nextLevel),
-      maxMana: nextMaxMana,
-      mana: Math.min(nextMaxMana, player.mana + manaIncrease),
-      health: Math.min(getMaxHealthForLevel(nextLevel), player.health),
-    };
-  }
-
   useEffect(() => {
-    // The one-second timer updates the UI; timestamps still decide when mana or energy is granted.
+    // The one-second timer updates the UI; timestamps still decide when energy is granted.
     const timerId = setInterval(() => {
       const time = Date.now();
       setCurrentTime(time);
       setPlayer((currentPlayer) => {
         const updatedPlayer = updateEnergy(currentPlayer, time);
-        const updatedManaPlayer = updateMana(updatedPlayer, time);
-        if (updatedManaPlayer !== currentPlayer) {
-          localStorage.setItem(
-            "player-state",
-            JSON.stringify(updatedManaPlayer),
-          );
+        if (updatedPlayer !== currentPlayer) {
+          localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
         }
-        return updatedManaPlayer;
+        return updatedPlayer;
       });
     }, 1000);
 
@@ -239,7 +201,7 @@ function App() {
 
   function purchaseItem(item) {
     if (player.gold < item.price) {
-      setMessage("Nincs elegendő aranyad ehhez a tárgyhoz.");
+      notify("Nincs elegendő aranyad ehhez a tárgyhoz.", "error");
       return;
     }
 
@@ -264,7 +226,7 @@ function App() {
         itemsPurchased: player.progress.itemsPurchased + 1,
       },
     });
-    setMessage(`${item.name} bekerült a táskádba.`);
+    notify(`${item.name} bekerült a táskádba.`, "success");
   }
 
   function equipItem(item) {
@@ -273,7 +235,7 @@ function App() {
         inventoryItem.itemId === item.id && inventoryItem.quantity > 0,
     );
     if (item.type !== "equipment" || !ownsItem) {
-      setMessage("Ezt a tárgyat nem szerelheted fel.");
+      notify("Ezt a tárgyat nem szerelheted fel.", "error");
       return;
     }
 
@@ -281,19 +243,19 @@ function App() {
       ...player,
       equipment: { ...player.equipment, [item.slot]: item.id },
     });
-    setMessage(`${item.name} felszerelve.`);
+    notify(`${item.name} felszerelve.`, "success");
   }
 
   function upgradeStat(stat) {
     if (!Object.hasOwn(player.stats, stat)) {
-      return;
+      return false;
     }
 
     const currentBaseStat = player.stats[stat];
     const upgradeCost = getStatUpgradeCost(currentBaseStat);
     if (player.gold < upgradeCost) {
-      setMessage("Nincs elegendő aranyad ehhez a fejlesztéshez.");
-      return;
+      notify("Nincs elegendő aranyad ehhez a fejlesztéshez.", "error");
+      return false;
     }
 
     persistPlayer({
@@ -308,7 +270,7 @@ function App() {
         statUpgrades: player.progress.statUpgrades + 1,
       },
     });
-    setMessage("A képességed egy ponttal megerősödött.");
+    return true;
   }
 
   function unequipItem(slot) {
@@ -316,24 +278,17 @@ function App() {
       ...player,
       equipment: { ...player.equipment, [slot]: null },
     });
-    setMessage("A tárgyat levetted.");
+    notify("A tárgyat levetted.", "success");
   }
 
   function attendLesson(lesson) {
     if (player.energy < lesson.energyCost) {
-      setMessage("Nincs elegendő energiád ehhez az órához.");
+      notify("Nincs elegendő energiád ehhez az órához.", "error");
       return;
     }
 
-    let nextLevel = player.level;
-    let nextXp = player.xp + lesson.xpReward;
-    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
-      nextXp -= getXpRequiredForLevel(nextLevel);
-      nextLevel += 1;
-    }
-
-    // XP rolls over after each level instead of accumulating past the threshold.
-    const leveledUp = nextLevel > player.level;
+    const progression = processExperience(player, lesson.xpReward);
+    const { leveledUp, newLevel: _newLevel, ...progressionState } = progression;
     const attendanceCount = (player.lessonProgress[lesson.id] || 0) + 1;
     const learnedSpellIds = (lesson.spellUnlocks || [])
       .filter(
@@ -344,10 +299,10 @@ function App() {
       .map((unlock) => unlock.spellId);
     const nextPlayer = {
       ...player,
-      energy: player.energy - lesson.energyCost,
-      ...getLevelProgression(nextLevel, nextXp),
+      ...progressionState,
+      energy: leveledUp ? player.maxEnergy : player.energy - lesson.energyCost,
       lastEnergyUpdate:
-        player.energy >= player.maxEnergy
+        leveledUp || player.energy >= player.maxEnergy
           ? Date.now()
           : player.lastEnergyUpdate,
       lessonProgress: {
@@ -364,74 +319,106 @@ function App() {
       learnedSpells.length > 0
         ? ` Új varázsigét tanultál: ${learnedSpells.map((spell) => spell.name).join(", ")}!`
         : "";
-    setMessage(
-      leveledUp
-        ? `Szintlépés! Elérted a(z) ${nextLevel}. szintet.${learnedMessage}`
-        : `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP.${learnedMessage}`,
-    );
+    if (!progression.leveledUp) {
+      notify(
+        `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP.${learnedMessage}`,
+        "success",
+      );
+    } else {
+      notifyLevelUp(progression, learnedMessage);
+    }
   }
 
-  function awardDuelRewards(enemy) {
-    let nextLevel = player.level;
-    let nextXp = player.xp + enemy.xpReward;
-    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
-      nextXp -= getXpRequiredForLevel(nextLevel);
-      nextLevel += 1;
-    }
+  function awardDuelRewards(enemy, remainingHealth) {
+    const progression = processExperience(
+      { ...player, health: remainingHealth },
+      enemy.xpReward,
+    );
+    const { leveledUp, newLevel: _newLevel, ...progressionState } = progression;
 
     // Rewards are persisted centrally so the duel page only controls temporary combat state.
     persistPlayer({
       ...player,
-      ...getLevelProgression(nextLevel, nextXp),
+      ...progressionState,
       gold: player.gold + enemy.goldReward,
       progress: {
         ...player.progress,
         duelWins: player.progress.duelWins + 1,
       },
     });
+    notifyLevelUp(progression);
     return {
-      leveledUp: nextLevel > player.level,
-      newLevel: nextLevel,
+      leveledUp,
+      newLevel: progression.newLevel,
     };
   }
 
   function claimQuestReward(quest) {
     if (
       player.claimedQuests.includes(quest.id) ||
+      !isQuestUnlocked(quest, player) ||
       !getQuestProgress(quest, player).isComplete
     ) {
       return;
     }
 
-    let nextLevel = player.level;
-    let nextXp = player.xp + quest.rewards.xp;
-    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
-      nextXp -= getXpRequiredForLevel(nextLevel);
-      nextLevel += 1;
-    }
+    const progression = processExperience(player, quest.rewards.xp);
+    const {
+      leveledUp: _leveledUp,
+      newLevel: _newLevel,
+      ...progressionState
+    } = progression;
 
     // The claimed ID is persisted with the reward so it can only be paid once.
     persistPlayer({
       ...player,
-      ...getLevelProgression(nextLevel, nextXp),
+      ...progressionState,
       gold: player.gold + quest.rewards.gold,
       claimedQuests: [...player.claimedQuests, quest.id],
+    });
+    notifyLevelUp(progression);
+  }
+
+  function completeExam(remainingHealth) {
+    const examQuest = quests.find((quest) =>
+      quest.objectives.some((objective) => objective.type === "examVictory"),
+    );
+    if (
+      !examQuest ||
+      player.completedMilestones.includes(examQuest.milestoneId) ||
+      !isExamReady(examQuest, player)
+    ) {
+      return false;
+    }
+
+    // Persist the milestone once so exam victories cannot farm normal rewards.
+    persistPlayer({
+      ...player,
+      health: Math.min(getMaxHealthForLevel(player.level), remainingHealth),
+      completedMilestones: [
+        ...player.completedMilestones,
+        examQuest.milestoneId,
+      ],
+    });
+    return true;
+  }
+
+  function persistDuelHealth(remainingHealth) {
+    persistPlayer({
+      ...player,
+      health: Math.min(getMaxHealthForLevel(player.level), remainingHealth),
     });
   }
 
   const energyCountdown = getEnergyCountdown(player, currentTime);
-  const manaCountdown = getManaCountdown(player, currentTime);
   const energyStatus = {
     countdown:
       energyCountdown === null ? null : formatCountdown(energyCountdown),
   };
-  const manaStatus = {
-    countdown: manaCountdown === null ? null : formatCountdown(manaCountdown),
-  };
-
+  const examQuest = quests.find((quest) => quest.id === "first-exam");
   return (
     <HashRouter>
-      <Layout>
+      <Layout notification={notification}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route
@@ -441,12 +428,10 @@ function App() {
                 player={player}
                 items={items}
                 onSaveName={saveName}
-                message={message}
                 onEquipItem={equipItem}
                 onUnequipItem={unequipItem}
                 onUpgradeStat={upgradeStat}
                 energyStatus={energyStatus}
-                manaStatus={manaStatus}
               />
             }
           />
@@ -456,7 +441,6 @@ function App() {
               <LessonsPage
                 lessons={lessons}
                 player={player}
-                message={message}
                 onAttendLesson={attendLesson}
                 energyStatus={energyStatus}
               />
@@ -469,19 +453,12 @@ function App() {
                 knownSpells={player.knownSpells}
                 spells={spells}
                 player={player}
-                manaStatus={manaStatus}
               />
             }
           />
           <Route
             path="/shop"
-            element={
-              <ShopPage
-                player={player}
-                message={message}
-                onPurchaseItem={purchaseItem}
-              />
-            }
+            element={<ShopPage player={player} onPurchaseItem={purchaseItem} />}
           />
           <Route
             path="/duel"
@@ -492,6 +469,9 @@ function App() {
                 spells={spells}
                 enemies={enemies}
                 onAwardRewards={awardDuelRewards}
+                onExamVictory={completeExam}
+                onDuelEnd={persistDuelHealth}
+                examReady={examQuest ? isExamReady(examQuest, player) : false}
               />
             }
           />

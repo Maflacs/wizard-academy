@@ -1,4 +1,5 @@
 import "./SpellsPage.css";
+import { getMaxManaForLevel } from "../utils/playerProgression";
 
 const spellTypeLabels = {
   attack: "Támadó",
@@ -7,7 +8,8 @@ const spellTypeLabels = {
   utility: "Segédmágia",
 };
 
-function SpellsPage({ knownSpells, spells, player, manaStatus }) {
+function SpellsPage({ knownSpells, spells, player }) {
+  const maxMana = getMaxManaForLevel(player.level);
   const learnedSpells = knownSpells
     .map((spellId) => spells.find((spell) => spell.id === spellId))
     .filter((spell) => spell);
@@ -17,12 +19,7 @@ function SpellsPage({ knownSpells, spells, player, manaStatus }) {
       <p className="eyebrow">Az akadémia varázsarchívuma</p>
       <h2>Varázskönyv</h2>
       <p className="lead">Az elsajátított varázslatok és azok titkai.</p>
-      <p className="spell-mana">
-        Mana: {player.mana} / {player.maxMana}
-        {manaStatus.countdown
-          ? ` · Következő mana: ${manaStatus.countdown}`
-          : " · A manád teljesen feltöltődött."}
-      </p>
+      <p className="spell-mana">Mana párbajban: {maxMana}</p>
       {learnedSpells.length === 0 ? (
         <p className="spellbook-empty">
           Még egyetlen varázslatot sem sajátítottál el.

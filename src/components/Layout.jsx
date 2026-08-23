@@ -1,7 +1,8 @@
 import { NavLink } from "react-router-dom";
+import GameNotification from "./GameNotification";
 import "./Layout.css";
 
-function Layout({ children }) {
+function Layout({ children, notification }) {
   // Keep navigation declarative so each game area has its own shareable route.
   return (
     <div className="game-shell">
@@ -25,6 +26,7 @@ function Layout({ children }) {
           <NavLink to="/quests">Feladatok</NavLink>
         </nav>
       </header>
+      <GameNotification notification={notification} />
       <main>{children}</main>
       <footer>Alapítva 1372-ben · Gyertyafénynél, szorgalmas tanulással</footer>
     </div>

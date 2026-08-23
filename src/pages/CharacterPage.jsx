@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import getEffectiveStats, { getEquipmentBonuses } from "../utils/playerStats";
 import { getXpRequiredForLevel } from "../utils/leveling";
 import {
@@ -18,14 +18,31 @@ function CharacterPage({
   player,
   items,
   onSaveName,
-  message,
   onEquipItem,
   onUnequipItem,
   onUpgradeStat,
   energyStatus,
-  manaStatus,
 }) {
   const [name, setName] = useState(player.name);
+  const [statMessage, setStatMessage] = useState("");
+
+  useEffect(() => {
+    if (!statMessage) return undefined;
+
+    const timeoutId = setTimeout(() => setStatMessage(""), 3000);
+    return () => clearTimeout(timeoutId);
+  }, [statMessage]);
+
+  function upgradeStat(stat) {
+    if (!onUpgradeStat(stat)) return;
+
+    const statNames = {
+      magicPower: "Mágikus erőd",
+      defense: "Védelmed",
+      focus: "Fókuszod",
+    };
+    setStatMessage(`${statNames[stat]} 1 ponttal nőtt.`);
+  }
 
   function saveName(event) {
     event.preventDefault();
@@ -105,9 +122,7 @@ function CharacterPage({
           </div>
           <div>
             <dt>Mana</dt>
-            <dd>
-              {player.mana} / {maxMana}
-            </dd>
+            <dd>Harci mana: {maxMana}</dd>
           </div>
         </dl>
         {energyStatus.countdown ? (
@@ -116,13 +131,6 @@ function CharacterPage({
           </p>
         ) : (
           <p className="energy-countdown">Az energiád teljesen feltöltődött.</p>
-        )}
-        {manaStatus.countdown ? (
-          <p className="energy-countdown">
-            Következő mana: {manaStatus.countdown}
-          </p>
-        ) : (
-          <p className="energy-countdown">A manád teljesen feltöltődött.</p>
         )}
       </div>
       <div className="character-sections">
@@ -197,7 +205,7 @@ function CharacterPage({
                 <button
                   className="button"
                   type="button"
-                  onClick={() => onUpgradeStat(stat)}
+                  onClick={() => upgradeStat(stat)}
                   disabled={player.gold < upgradeCost}
                 >
                   Fejlesztem
@@ -207,7 +215,11 @@ function CharacterPage({
           })}
         </div>
       </div>
-      {message && <p className="game-message">{message}</p>}
+      {statMessage && (
+        <p className="stat-upgrade-message" role="status" aria-live="polite">
+          {statMessage}
+        </p>
+      )}
       <div className="parchment-panel inventory">
         <h3 className="eyebrow title">A táska tartalma</h3>
         {inventoryItems.length === 0 ? (

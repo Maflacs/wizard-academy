@@ -7,7 +7,7 @@ const statLabels = {
   focus: "Fókusz",
 };
 
-function ShopPage({ player, message, onPurchaseItem }) {
+function ShopPage({ player, onPurchaseItem }) {
   const formattedGold = new Intl.NumberFormat("hu-HU").format(player.gold);
 
   return (
@@ -50,7 +50,6 @@ function ShopPage({ player, message, onPurchaseItem }) {
           </article>
         ))}
       </div>
-      {message && <p className="game-message">{message}</p>}
     </section>
   );
 }

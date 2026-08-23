@@ -1,1 +1,1 @@
-website: https://maflacs.github.io/wizard-academy/
+Link: https://maflacs.github.io/wizard-academy/

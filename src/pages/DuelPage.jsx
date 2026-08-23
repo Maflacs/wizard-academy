@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import getEffectiveStats from "../utils/playerStats";
 import applyDamageVariance, { chooseEnemyAction } from "../utils/combat";
 import createScaledEnemy from "../utils/enemyScaling";
@@ -15,12 +16,13 @@ function chooseRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function createDuelState(enemy, playerLevel) {
+function createDuelState(enemy, playerLevel, playerHealth) {
   const scaledEnemy = createScaledEnemy(enemy, playerLevel);
+  const maxHealth = getMaxHealthForLevel(playerLevel);
   return {
     scaledEnemy,
     enemyHealth: scaledEnemy.maxHealth,
-    combatHealth: getMaxHealthForLevel(playerLevel),
+    combatHealth: Math.min(maxHealth, Math.max(0, playerHealth)),
     combatMana: getMaxManaForLevel(playerLevel),
     maxHealth: getMaxHealthForLevel(playerLevel),
     maxMana: getMaxManaForLevel(playerLevel),
@@ -137,14 +139,38 @@ function simulateDuel(player, spells, items, duelState) {
   return { ...state, status: "draw", log };
 }
 
-function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
+function DuelPage({
+  player,
+  items,
+  spells,
+  enemies,
+  onAwardRewards,
+  onExamVictory,
+  onDuelEnd,
+  examReady,
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isExamMode =
+    new URLSearchParams(location.search).get("exam") === "first-exam";
+  const examOpponent = enemies.find((enemy) => enemy.isExamOpponent);
+  const normalEnemies = enemies.filter((enemy) => !enemy.isExamOpponent);
+  const examCompleted = player.completedMilestones.includes("first-exam");
+  const canStartDuel =
+    player.health > 0 && (!isExamMode || (!examCompleted && examReady));
   const [duel, setDuel] = useState(() =>
-    createDuelState(chooseRandom(enemies), player.level),
+    createDuelState(
+      isExamMode ? examOpponent : chooseRandom(normalEnemies),
+      player.level,
+      player.health,
+    ),
   );
   const [combatLog, setCombatLog] = useState([
     `${duel.scaledEnemy.name} megjelent a párbajban.`,
   ]);
-  const [duelStatus, setDuelStatus] = useState("active");
+  const [duelStatus, setDuelStatus] = useState(
+    canStartDuel ? "active" : "blocked",
+  );
   const [rewardClaimed, setRewardClaimed] = useState(false);
   const [victorySummary, setVictorySummary] = useState(null);
   const effectiveStats = getEffectiveStats(player, items);
@@ -164,7 +190,22 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
   }
 
   function startNewDuel() {
-    const nextDuel = createDuelState(chooseRandom(enemies), player.level);
+    if (!canStartDuel) {
+      setDuelStatus("blocked");
+      setCombatLog([
+        examCompleted
+          ? "Ezt a vizsgát már sikeresen teljesítetted."
+          : player.health <= 0
+            ? "Túl sérült vagy a párbajhoz. Előbb fel kell gyógyulnod."
+            : "A vizsga feltételei még nem teljesültek.",
+      ]);
+      return;
+    }
+    const nextDuel = createDuelState(
+      isExamMode ? examOpponent : chooseRandom(normalEnemies),
+      player.level,
+      player.health,
+    );
     setDuel(nextDuel);
     setCombatLog([`${nextDuel.scaledEnemy.name} megjelent a párbajban.`]);
     setDuelStatus("active");
@@ -172,10 +213,12 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
     setVictorySummary(null);
   }
 
-  function finishVictory() {
+  function finishVictory(nextDuel) {
     setDuelStatus("victory");
     if (!rewardClaimed) {
-      const rewards = onAwardRewards(duel.scaledEnemy);
+      const rewards = isExamMode
+        ? { exam: onExamVictory(nextDuel.combatHealth) }
+        : onAwardRewards(nextDuel.scaledEnemy, nextDuel.combatHealth);
       setVictorySummary(rewards);
       setRewardClaimed(true);
     }
@@ -185,6 +228,7 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
     performEnemyAction(nextDuel, effectiveStats, addLog);
     setDuel(nextDuel);
     if (nextDuel.combatHealth <= 0) {
+      onDuelEnd(0);
       setDuelStatus("defeat");
       addLog("Vereség! A gyakorlópárbajt elvesztetted.");
     }
@@ -227,7 +271,7 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
     }
     if (nextDuel.enemyHealth <= 0) {
       setDuel(nextDuel);
-      finishVictory();
+      finishVictory(nextDuel);
       return;
     }
     performManualEnemyTurn(nextDuel);
@@ -240,8 +284,14 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
     setCombatLog(result.log);
     setDuelStatus(result.status);
     if (result.status === "victory" && !rewardClaimed) {
-      setVictorySummary(onAwardRewards(result.scaledEnemy));
+      setVictorySummary(
+        isExamMode
+          ? { exam: onExamVictory(result.combatHealth) }
+          : onAwardRewards(result.scaledEnemy, result.combatHealth),
+      );
       setRewardClaimed(true);
+    } else if (result.status !== "victory") {
+      onDuelEnd(result.combatHealth);
     }
     if (result.status === "draw")
       setCombatLog([
@@ -252,8 +302,10 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
 
   return (
     <section className="page duel-page">
-      <p className="eyebrow">A gyakorlópárbaj csarnoka</p>
-      <h2>Párbajterem</h2>
+      <p className="eyebrow">
+        {isExamMode ? "Az akadémia vizsgaterme" : "A gyakorlópárbaj csarnoka"}
+      </p>
+      <h2>{isExamMode ? "Első vizsga" : "Párbajterem"}</h2>
       <div className="duel-status-bar">
         <span>
           Mana: {duel.combatMana} / {combatMaxMana}
@@ -278,7 +330,9 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
           VS
         </div>
         <article className="parchment-panel combatant enemy-combatant">
-          <p className="eyebrow">Gyakorló ellenfél</p>
+          <p className="eyebrow">
+            {isExamMode ? "Vizsgaellenfél" : "Gyakorló ellenfél"}
+          </p>
           <h3>{duel.scaledEnemy.name}</h3>
           <p>Szint: {duel.scaledEnemy.level}</p>
           <p>
@@ -340,7 +394,7 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
           ))}
         </ul>
       </div>
-      {duelStatus === "victory" && victorySummary && (
+      {duelStatus === "victory" && victorySummary && !isExamMode && (
         <div className="parchment-panel victory-summary">
           <p className="eyebrow">Győzelem!</p>
           <h3>Jutalmak</h3>
@@ -348,7 +402,7 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
           <p>+{duel.scaledEnemy.goldReward} korona</p>
           {victorySummary.leveledUp && (
             <strong>
-              Szintlépés! Elérted a(z) {victorySummary.newLevel}. szintet.
+              Szintet léptél! Életerőd és energiád teljesen feltöltődött.
             </strong>
           )}
         </div>
@@ -356,15 +410,36 @@ function DuelPage({ player, items, spells, enemies, onAwardRewards }) {
       {duelStatus !== "active" && (
         <div className="duel-result">
           <strong>
-            {duelStatus === "victory"
-              ? "Győzedelmeskedtél!"
-              : duelStatus === "defeat"
-                ? "Vereség."
-                : "Döntetlen."}
+            {duelStatus === "blocked"
+              ? examCompleted
+                ? "Ezt a vizsgát már teljesítetted."
+                : player.health <= 0
+                  ? "Túl sérült vagy a harchoz."
+                  : "A vizsga feltételei még nem teljesültek."
+              : isExamMode && duelStatus === "victory"
+                ? "A vizsga sikerült!"
+                : isExamMode && duelStatus === "defeat"
+                  ? "A vizsga nem sikerült. Felkészülhetsz, majd újra próbálkozhatsz."
+                  : duelStatus === "victory"
+                    ? "Győzedelmeskedtél!"
+                    : duelStatus === "defeat"
+                      ? "Vereség."
+                      : "Döntetlen."}
           </strong>
-          <button className="button" type="button" onClick={startNewDuel}>
-            Új párbaj
-          </button>
+          {duelStatus === "blocked" ? null : isExamMode &&
+            duelStatus === "victory" ? (
+            <button
+              className="button"
+              type="button"
+              onClick={() => navigate("/quests")}
+            >
+              Vissza a feladatokhoz
+            </button>
+          ) : (
+            <button className="button" type="button" onClick={startNewDuel}>
+              {isExamMode ? "Új vizsgapróba" : "Új párbaj"}
+            </button>
+          )}
         </div>
       )}
     </section>

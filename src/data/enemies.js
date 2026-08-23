@@ -50,6 +50,26 @@ const enemies = [
       { type: "heavyAttack", weight: 30 },
     ],
   },
+  {
+    id: "academy-guardian-spirit",
+    name: "Az Akadémia Őrszelleme",
+    description:
+      "A tanoncok tudását próbára tevő, mágikusan megidézett őrszellem.",
+    isExamOpponent: true,
+    archetype: "exam",
+    combatStyle: "Vizsgáztató",
+    difficulty: "Első vizsga",
+    baseHealth: 74,
+    baseAttack: 12,
+    healthPerLevel: 12,
+    attackPerLevel: 2,
+    baseXpReward: 0,
+    baseGoldReward: 0,
+    actions: [
+      { type: "attack", weight: 75 },
+      { type: "shield", weight: 25, shieldAmount: 10 },
+    ],
+  },
 ];
 
 export default enemies;

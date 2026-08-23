@@ -1,13 +1,7 @@
 import "./LessonsPage.css";
 import spells from "../data/spells";
 
-function LessonsPage({
-  lessons,
-  player,
-  message,
-  onAttendLesson,
-  energyStatus,
-}) {
+function LessonsPage({ lessons, player, onAttendLesson, energyStatus }) {
   return (
     <section className="page">
       <p className="eyebrow">Az akadémia órarendje</p>
@@ -86,7 +80,6 @@ function LessonsPage({
           </article>
         ))}
       </div>
-      {message && <p className="game-message">{message}</p>}
     </section>
   );
 }

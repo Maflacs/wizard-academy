@@ -19,9 +19,29 @@
     serif;
   white-space: nowrap;
 }
+.quest-status {
+  text-transform: uppercase;
+}
+.quest-locked {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-style: italic;
+}
+.quest-claimed > p:not(.eyebrow),
+.quest-claimed .quest-objectives {
+  display: none;
+}
+.quest-claimed .quest-footer {
+  margin-top: 18px;
+}
 .quest > p:not(.eyebrow) {
   margin: 18px 0 24px;
   color: var(--muted);
+}
+.quest-requirement {
+  color: var(--red) !important;
+  font-size: 14px;
+  font-weight: bold;
 }
 .quest-objectives {
   display: grid;

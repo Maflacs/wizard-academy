@@ -124,14 +124,6 @@ main {
   background: #9a8d74;
   cursor: not-allowed;
 }
-.game-message {
-  margin: 22px 0 0;
-  padding: 13px 16px;
-  border-left: 4px solid var(--gold);
-  color: var(--red);
-  background: rgba(255, 249, 226, 0.65);
-  font-weight: bold;
-}
 footer {
   padding: 20px;
   border-top: 3px double var(--line);
