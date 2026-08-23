@@ -1,7 +1,13 @@
 import "./LessonsPage.css";
 import spells from "../data/spells";
 
-function LessonsPage({ lessons, player, onAttendLesson, energyStatus }) {
+function LessonsPage({
+  lessons,
+  player,
+  onAttendLesson,
+  energyStatus,
+  isResting,
+}) {
   return (
     <section className="page">
       <p className="eyebrow">Az akadémia órarendje</p>
@@ -73,7 +79,7 @@ function LessonsPage({ lessons, player, onAttendLesson, energyStatus }) {
               className="button"
               type="button"
               onClick={() => onAttendLesson(lesson)}
-              disabled={player.energy < lesson.energyCost}
+              disabled={isResting || player.energy < lesson.energyCost}
             >
               Részt veszek
             </button>

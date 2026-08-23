@@ -22,6 +22,8 @@ function processExperience(player, earnedXp) {
     maxHealth,
     health: leveledUp ? maxHealth : Math.min(maxHealth, player.health),
     energy: leveledUp ? player.maxEnergy : player.energy,
+    lastHealthUpdate: leveledUp ? Date.now() : player.lastHealthUpdate,
+    isResting: leveledUp ? false : player.isResting,
     leveledUp,
     newLevel: level,
   };

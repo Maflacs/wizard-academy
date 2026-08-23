@@ -148,6 +148,7 @@ function DuelPage({
   onExamVictory,
   onDuelEnd,
   examReady,
+  isResting,
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -157,7 +158,9 @@ function DuelPage({
   const normalEnemies = enemies.filter((enemy) => !enemy.isExamOpponent);
   const examCompleted = player.completedMilestones.includes("first-exam");
   const canStartDuel =
-    player.health > 0 && (!isExamMode || (!examCompleted && examReady));
+    player.health > 0 &&
+    !isResting &&
+    (!isExamMode || (!examCompleted && examReady));
   const [duel, setDuel] = useState(() =>
     createDuelState(
       isExamMode ? examOpponent : chooseRandom(normalEnemies),
@@ -197,7 +200,9 @@ function DuelPage({
           ? "Ezt a vizsgát már sikeresen teljesítetted."
           : player.health <= 0
             ? "Túl sérült vagy a párbajhoz. Előbb fel kell gyógyulnod."
-            : "A vizsga feltételei még nem teljesültek.",
+            : isResting
+              ? "A karaktered a Gyengélkedőn pihen. Előbb keltsd fel, hogy folytathasd."
+              : "A vizsga feltételei még nem teljesültek.",
       ]);
       return;
     }

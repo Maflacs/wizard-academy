@@ -10,7 +10,7 @@ function Layout({ children, notification }) {
         <div className="crest" aria-hidden="true">
           W
         </div>
-        <div>
+        <div className="site-branding">
           <p className="eyebrow">Az Arkanum Krónikája</p>
           <h1>Csillagtorony Akadémia</h1>
         </div>
@@ -24,6 +24,7 @@ function Layout({ children, notification }) {
           <NavLink to="/duel">Párbajterem</NavLink>
           <NavLink to="/shop">Bolt</NavLink>
           <NavLink to="/quests">Feladatok</NavLink>
+          <NavLink to="/infirmary">Gyengélkedő</NavLink>
         </nav>
       </header>
       <GameNotification notification={notification} />

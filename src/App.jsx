@@ -12,9 +12,16 @@ import ShopPage from "./pages/ShopPage";
 import SpellsPage from "./pages/SpellsPage";
 import DuelPage from "./pages/DuelPage";
 import QuestsPage from "./pages/QuestsPage";
+import InfirmaryPage from "./pages/InfirmaryPage";
 import quests from "./data/quests";
 import { processExperience } from "./utils/leveling";
 import { getMaxHealthForLevel } from "./utils/playerProgression";
+import {
+  getHealthCountdown,
+  getInstantTreatmentCost,
+  changeRestingState,
+  updateHealth,
+} from "./utils/health";
 import { getQuestProgress, isExamReady, isQuestUnlocked } from "./utils/quests";
 import getStatUpgradeCost from "./utils/statUpgrades";
 
@@ -26,6 +33,8 @@ const initialPlayer = {
   energy: 100,
   maxEnergy: 100,
   health: 140,
+  lastHealthUpdate: Date.now(),
+  isResting: false,
   knownSpells: ["spark-bolt"],
   inventory: [],
   stats: {
@@ -75,6 +84,12 @@ function loadPlayer() {
         getMaxHealthForLevel(savedData.level || initialPlayer.level),
       ),
       lastEnergyUpdate: savedData.lastEnergyUpdate || Date.now(),
+      lastHealthUpdate:
+        savedData.health >=
+        getMaxHealthForLevel(savedData.level || initialPlayer.level)
+          ? Date.now()
+          : savedData.lastHealthUpdate || Date.now(),
+      isResting: savedData.isResting === true,
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
       lessonProgress: {
         ...initialPlayer.lessonProgress,
@@ -88,7 +103,10 @@ function loadPlayer() {
         ? savedData.completedMilestones
         : initialPlayer.completedMilestones,
     };
-    const updatedPlayer = updateEnergy(player, Date.now());
+    const updatedPlayer = updateHealth(
+      updateEnergy(player, Date.now()),
+      Date.now(),
+    );
     localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
     return updatedPlayer;
   }
@@ -97,7 +115,10 @@ function loadPlayer() {
     ...initialPlayer,
     name: localStorage.getItem("wizard-name") || initialPlayer.name,
   };
-  const updatedPlayer = updateEnergy(player, Date.now());
+  const updatedPlayer = updateHealth(
+    updateEnergy(player, Date.now()),
+    Date.now(),
+  );
   localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
   return updatedPlayer;
 }
@@ -172,6 +193,15 @@ function App() {
     );
   }
 
+  function blockWhileResting() {
+    if (!player.isResting) return false;
+    notify(
+      "A karaktered a Gyengélkedőn pihen. Előbb keltsd fel, hogy folytathasd.",
+      "info",
+    );
+    return true;
+  }
+
   function persistPlayer(nextPlayer) {
     localStorage.setItem("player-state", JSON.stringify(nextPlayer));
     setPlayer(nextPlayer);
@@ -183,7 +213,10 @@ function App() {
       const time = Date.now();
       setCurrentTime(time);
       setPlayer((currentPlayer) => {
-        const updatedPlayer = updateEnergy(currentPlayer, time);
+        const updatedPlayer = updateHealth(
+          updateEnergy(currentPlayer, time),
+          time,
+        );
         if (updatedPlayer !== currentPlayer) {
           localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
         }
@@ -200,6 +233,7 @@ function App() {
   }
 
   function purchaseItem(item) {
+    if (blockWhileResting()) return;
     if (player.gold < item.price) {
       notify("Nincs elegendő aranyad ehhez a tárgyhoz.", "error");
       return;
@@ -230,6 +264,7 @@ function App() {
   }
 
   function equipItem(item) {
+    if (blockWhileResting()) return;
     const ownsItem = player.inventory.some(
       (inventoryItem) =>
         inventoryItem.itemId === item.id && inventoryItem.quantity > 0,
@@ -247,6 +282,7 @@ function App() {
   }
 
   function upgradeStat(stat) {
+    if (blockWhileResting()) return false;
     if (!Object.hasOwn(player.stats, stat)) {
       return false;
     }
@@ -274,6 +310,7 @@ function App() {
   }
 
   function unequipItem(slot) {
+    if (blockWhileResting()) return;
     persistPlayer({
       ...player,
       equipment: { ...player.equipment, [slot]: null },
@@ -282,6 +319,7 @@ function App() {
   }
 
   function attendLesson(lesson) {
+    if (blockWhileResting()) return;
     if (player.energy < lesson.energyCost) {
       notify("Nincs elegendő energiád ehhez az órához.", "error");
       return;
@@ -341,6 +379,7 @@ function App() {
       ...player,
       ...progressionState,
       gold: player.gold + enemy.goldReward,
+      lastHealthUpdate: Date.now(),
       progress: {
         ...player.progress,
         duelWins: player.progress.duelWins + 1,
@@ -354,6 +393,7 @@ function App() {
   }
 
   function claimQuestReward(quest) {
+    if (blockWhileResting()) return;
     if (
       player.claimedQuests.includes(quest.id) ||
       !isQuestUnlocked(quest, player) ||
@@ -395,6 +435,7 @@ function App() {
     persistPlayer({
       ...player,
       health: Math.min(getMaxHealthForLevel(player.level), remainingHealth),
+      lastHealthUpdate: Date.now(),
       completedMilestones: [
         ...player.completedMilestones,
         examQuest.milestoneId,
@@ -407,13 +448,48 @@ function App() {
     persistPlayer({
       ...player,
       health: Math.min(getMaxHealthForLevel(player.level), remainingHealth),
+      lastHealthUpdate: Date.now(),
     });
+  }
+
+  function treatPlayer() {
+    const maxHealth = getMaxHealthForLevel(player.level);
+    const missingHealth = Math.max(0, maxHealth - player.health);
+    if (missingHealth === 0) return false;
+
+    const treatmentCost = getInstantTreatmentCost(player);
+    if (player.gold < treatmentCost) return false;
+
+    persistPlayer({
+      ...player,
+      gold: player.gold - treatmentCost,
+      health: maxHealth,
+      lastHealthUpdate: Date.now(),
+      isResting: false,
+    });
+    return true;
+  }
+
+  function startResting() {
+    if (blockWhileResting()) return false;
+    if (player.health >= getMaxHealthForLevel(player.level)) return false;
+    persistPlayer(changeRestingState(player, true, Date.now()));
+    return true;
+  }
+
+  function stopResting() {
+    const nextPlayer = changeRestingState(player, false, Date.now());
+    persistPlayer(nextPlayer);
+    return true;
   }
 
   const energyCountdown = getEnergyCountdown(player, currentTime);
   const energyStatus = {
     countdown:
       energyCountdown === null ? null : formatCountdown(energyCountdown),
+  };
+  const healthStatus = {
+    countdown: getHealthCountdown(player, currentTime),
   };
   const examQuest = quests.find((quest) => quest.id === "first-exam");
   return (
@@ -432,6 +508,7 @@ function App() {
                 onUnequipItem={unequipItem}
                 onUpgradeStat={upgradeStat}
                 energyStatus={energyStatus}
+                isResting={player.isResting}
               />
             }
           />
@@ -443,6 +520,7 @@ function App() {
                 player={player}
                 onAttendLesson={attendLesson}
                 energyStatus={energyStatus}
+                isResting={player.isResting}
               />
             }
           />
@@ -458,7 +536,13 @@ function App() {
           />
           <Route
             path="/shop"
-            element={<ShopPage player={player} onPurchaseItem={purchaseItem} />}
+            element={
+              <ShopPage
+                player={player}
+                onPurchaseItem={purchaseItem}
+                isResting={player.isResting}
+              />
+            }
           />
           <Route
             path="/duel"
@@ -471,6 +555,7 @@ function App() {
                 onAwardRewards={awardDuelRewards}
                 onExamVictory={completeExam}
                 onDuelEnd={persistDuelHealth}
+                isResting={player.isResting}
                 examReady={examQuest ? isExamReady(examQuest, player) : false}
               />
             }
@@ -482,6 +567,21 @@ function App() {
                 player={player}
                 quests={quests}
                 onClaimQuestReward={claimQuestReward}
+                isResting={player.isResting}
+              />
+            }
+          />
+          <Route
+            path="/infirmary"
+            element={
+              <InfirmaryPage
+                player={player}
+                energyStatus={energyStatus}
+                healthStatus={healthStatus}
+                onTreatPlayer={treatPlayer}
+                onStartResting={startResting}
+                onStopResting={stopResting}
+                getTreatmentCost={getInstantTreatmentCost}
               />
             }
           />

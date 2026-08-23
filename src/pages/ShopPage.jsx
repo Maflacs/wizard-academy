@@ -7,7 +7,7 @@ const statLabels = {
   focus: "Fókusz",
 };
 
-function ShopPage({ player, onPurchaseItem }) {
+function ShopPage({ player, onPurchaseItem, isResting }) {
   const formattedGold = new Intl.NumberFormat("hu-HU").format(player.gold);
 
   return (
@@ -43,7 +43,7 @@ function ShopPage({ player, onPurchaseItem }) {
               className="button"
               type="button"
               onClick={() => onPurchaseItem(item)}
-              disabled={player.gold < item.price}
+              disabled={isResting || player.gold < item.price}
             >
               Megvásárolom
             </button>

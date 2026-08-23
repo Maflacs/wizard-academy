@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { getQuestProgress, getQuestStatus, isExamReady } from "../utils/quests";
 import "./QuestsPage.css";
 
-function QuestsPage({ player, quests, onClaimQuestReward }) {
+function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
   const navigate = useNavigate();
 
   return (
@@ -93,7 +93,7 @@ function QuestsPage({ player, quests, onClaimQuestReward }) {
                         className="button"
                         type="button"
                         onClick={() => navigate("/duel?exam=first-exam")}
-                        disabled={!isExamReady(quest, player)}
+                        disabled={isResting || !isExamReady(quest, player)}
                       >
                         {isExamReady(quest, player)
                           ? "Vizsga megkezdése"
@@ -104,7 +104,7 @@ function QuestsPage({ player, quests, onClaimQuestReward }) {
                         className="button"
                         type="button"
                         onClick={() => onClaimQuestReward(quest)}
-                        disabled={status !== "complete"}
+                        disabled={isResting || status !== "complete"}
                       >
                         Jutalom átvétele
                       </button>

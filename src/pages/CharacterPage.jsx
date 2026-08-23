@@ -22,6 +22,7 @@ function CharacterPage({
   onUnequipItem,
   onUpgradeStat,
   energyStatus,
+  isResting,
 }) {
   const [name, setName] = useState(player.name);
   const [statMessage, setStatMessage] = useState("");
@@ -165,6 +166,7 @@ function CharacterPage({
                     className="text-button"
                     type="button"
                     onClick={() => onUnequipItem(slot.key)}
+                    disabled={isResting}
                   >
                     Leveszem
                   </button>
@@ -206,7 +208,7 @@ function CharacterPage({
                   className="button"
                   type="button"
                   onClick={() => upgradeStat(stat)}
-                  disabled={player.gold < upgradeCost}
+                  disabled={isResting || player.gold < upgradeCost}
                 >
                   Fejlesztem
                 </button>
@@ -240,6 +242,7 @@ function CharacterPage({
                         className="text-button"
                         type="button"
                         onClick={() => onEquipItem(inventoryItem.item)}
+                        disabled={isResting}
                       >
                         Felszerelem
                       </button>

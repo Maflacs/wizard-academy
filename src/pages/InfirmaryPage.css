@@ -1,0 +1,57 @@
+.infirmary-page .lead {
+  margin-bottom: 32px;
+}
+.infirmary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 22px;
+}
+.recovery-panel h3 {
+  margin-top: 8px;
+  color: var(--red);
+  font-size: 28px;
+}
+.recovery-panel p:not(.eyebrow),
+.treatment-panel p:not(.eyebrow) {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+.treatment-panel {
+  margin-top: 22px;
+}
+.rest-panel {
+  margin-top: 22px;
+}
+.rest-panel h3 {
+  margin-top: 8px;
+  font-size: 18px;
+}
+.rest-panel p:not(.eyebrow) {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+.rest-panel .button {
+  margin-top: 18px;
+}
+.treatment-panel h3 {
+  margin-top: 8px;
+}
+.treatment-panel .button {
+  margin-top: 18px;
+}
+.treatment-hint,
+.infirmary-message {
+  color: var(--red) !important;
+  font-weight: bold;
+}
+.infirmary-message {
+  margin: 16px 0 0;
+  padding: 11px 14px;
+  border-left: 3px solid var(--gold);
+  background: rgba(255, 249, 226, 0.65);
+}
+@media (max-width: 700px) {
+  .infirmary-grid {
+    grid-template-columns: 1fr;
+  }
+}
