@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { getQuestProgress, getQuestStatus, isExamReady } from "../utils/quests";
+import { getAcademyYear } from "../utils/academy";
 import "./QuestsPage.css";
 
 function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
   const navigate = useNavigate();
+  const academyYear = getAcademyYear(player);
 
   return (
     <section className="page quests-page">
@@ -12,6 +14,9 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
       <p className="lead">
         Rövid célok, amelyek végigvezetnek az akadémia első évén.
       </p>
+      {academyYear >= 2 && (
+        <p className="academy-complete">I. évfolyam teljesítve</p>
+      )}
       <div className="quest-list">
         {quests.map((quest) => {
           const progress = getQuestProgress(quest, player);

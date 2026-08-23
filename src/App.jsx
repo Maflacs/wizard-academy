@@ -23,6 +23,7 @@ import {
   updateHealth,
 } from "./utils/health";
 import { getQuestProgress, isExamReady, isQuestUnlocked } from "./utils/quests";
+import { getAcademyYear } from "./utils/academy";
 import getStatUpgradeCost from "./utils/statUpgrades";
 
 const initialPlayer = {
@@ -103,6 +104,16 @@ function loadPlayer() {
         ? savedData.completedMilestones
         : initialPlayer.completedMilestones,
     };
+    if (
+      player.claimedQuests.includes("first-exam") &&
+      player.completedMilestones.includes("first-exam") &&
+      !player.completedMilestones.includes("first-year-complete")
+    ) {
+      player.completedMilestones = [
+        ...player.completedMilestones,
+        "first-year-complete",
+      ];
+    }
     const updatedPlayer = updateHealth(
       updateEnergy(player, Date.now()),
       Date.now(),
@@ -410,13 +421,26 @@ function App() {
     } = progression;
 
     // The claimed ID is persisted with the reward so it can only be paid once.
+    const completesFirstYear = quest.id === "first-exam";
+    const completedMilestones =
+      completesFirstYear &&
+      !player.completedMilestones.includes("first-year-complete")
+        ? [...player.completedMilestones, "first-year-complete"]
+        : player.completedMilestones;
     persistPlayer({
       ...player,
       ...progressionState,
       gold: player.gold + quest.rewards.gold,
       claimedQuests: [...player.claimedQuests, quest.id],
+      completedMilestones,
     });
     notifyLevelUp(progression);
+    if (completesFirstYear) {
+      notify(
+        "Teljesítetted az I. évfolyamot! Megnyílt előtted a II. évfolyam.",
+        "yearUp",
+      );
+    }
   }
 
   function completeExam(remainingHealth) {
@@ -496,7 +520,7 @@ function App() {
     <HashRouter>
       <Layout notification={notification}>
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<HomePage player={player} />} />
           <Route
             path="/character"
             element={
@@ -509,6 +533,7 @@ function App() {
                 onUpgradeStat={upgradeStat}
                 energyStatus={energyStatus}
                 isResting={player.isResting}
+                academyYear={getAcademyYear(player)}
               />
             }
           />

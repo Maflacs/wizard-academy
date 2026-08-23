@@ -1,10 +1,14 @@
 import { NavLink } from "react-router-dom";
 import "./HomePage.css";
+import { formatAcademyYear, getAcademyYear } from "../utils/academy";
 
-function HomePage() {
+function HomePage({ player }) {
+  const academyYear = getAcademyYear(player);
   return (
     <section className="page home-page">
-      <p className="eyebrow">I. szemeszter · Az iskola kapui kitárultak</p>
+      <p className="eyebrow">
+        {formatAcademyYear(academyYear)} évfolyam · Az iskola kapui kitárultak
+      </p>
       <h2>Üdvözlünk, tanonc!</h2>
       <p className="lead">
         Megérkezett a leveled. A Csillagtorony Akadémia az öreg tölgyfaajtón túl

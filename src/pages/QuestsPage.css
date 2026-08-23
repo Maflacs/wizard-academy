@@ -5,6 +5,11 @@
   display: grid;
   gap: 24px;
 }
+.academy-complete {
+  margin: -14px 0 24px;
+  color: var(--red);
+  font-weight: bold;
+}
 .quest-heading,
 .quest-footer {
   display: flex;

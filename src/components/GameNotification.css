@@ -20,3 +20,9 @@
   background: var(--red);
   box-shadow: 0 7px 20px rgba(125, 45, 43, 0.3);
 }
+.notification-yearUp {
+  border: 2px solid var(--gold);
+  color: var(--ink);
+  background: #f4e5bd;
+  box-shadow: 0 7px 20px rgba(180, 136, 69, 0.3);
+}

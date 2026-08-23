@@ -6,6 +6,7 @@ import {
   getMaxManaForLevel,
 } from "../utils/playerProgression";
 import getStatUpgradeCost from "../utils/statUpgrades";
+import { formatAcademyYear } from "../utils/academy";
 import "./CharacterPage.css";
 
 const equipmentSlots = [
@@ -23,6 +24,7 @@ function CharacterPage({
   onUpgradeStat,
   energyStatus,
   isResting,
+  academyYear,
 }) {
   const [name, setName] = useState(player.name);
   const [statMessage, setStatMessage] = useState("");
@@ -90,6 +92,10 @@ function CharacterPage({
           <div>
             <dt>Rend</dt>
             <dd>Még nincs kijelölve</dd>
+          </div>
+          <div>
+            <dt>Akadémiai évfolyam</dt>
+            <dd>{formatAcademyYear(academyYear)}</dd>
           </div>
           <div>
             <dt>Szint</dt>
