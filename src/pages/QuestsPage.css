@@ -1,0 +1,80 @@
+.quests-page .lead {
+  margin-bottom: 32px;
+}
+.quest-list {
+  display: grid;
+  gap: 24px;
+}
+.quest-heading,
+.quest-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.quest-heading > strong {
+  color: var(--red);
+  font:
+    700 13px Cinzel,
+    serif;
+  white-space: nowrap;
+}
+.quest > p:not(.eyebrow) {
+  margin: 18px 0 24px;
+  color: var(--muted);
+}
+.quest-objectives {
+  display: grid;
+  gap: 11px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+.quest-objectives li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(188, 167, 123, 0.55);
+}
+.quest-objectives li.completed {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.objective-mark {
+  color: var(--red);
+  font-size: 20px;
+  line-height: 1;
+  text-decoration: none;
+}
+.quest-objectives strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.quest-footer {
+  align-items: end;
+}
+.quest-footer p {
+  margin: 0;
+}
+.quest-footer .eyebrow {
+  margin-bottom: 4px;
+}
+.quest-complete {
+  margin: 20px 0 0;
+  color: var(--red);
+  font-weight: bold;
+}
+@media (max-width: 560px) {
+  .quest-heading,
+  .quest-footer {
+    display: grid;
+  }
+  .quest-heading > strong {
+    white-space: normal;
+  }
+  .quest-footer .button {
+    width: 100%;
+  }
+}

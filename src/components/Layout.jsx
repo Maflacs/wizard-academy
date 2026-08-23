@@ -22,6 +22,7 @@ function Layout({ children }) {
           <NavLink to="/spells">Varázskönyv</NavLink>
           <NavLink to="/duel">Párbajterem</NavLink>
           <NavLink to="/shop">Bolt</NavLink>
+          <NavLink to="/quests">Feladatok</NavLink>
         </nav>
       </header>
       <main>{children}</main>

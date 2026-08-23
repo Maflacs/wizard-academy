@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import enemies from "./data/enemies";
 import items from "./data/items";
@@ -11,11 +11,14 @@ import LessonsPage from "./pages/LessonsPage";
 import ShopPage from "./pages/ShopPage";
 import SpellsPage from "./pages/SpellsPage";
 import DuelPage from "./pages/DuelPage";
+import QuestsPage from "./pages/QuestsPage";
+import quests from "./data/quests";
 import { getXpRequiredForLevel } from "./utils/leveling";
 import {
   getMaxHealthForLevel,
   getMaxManaForLevel,
 } from "./utils/playerProgression";
+import { getQuestProgress } from "./utils/quests";
 import getStatUpgradeCost from "./utils/statUpgrades";
 
 const initialPlayer = {
@@ -44,6 +47,12 @@ const initialPlayer = {
   lastEnergyUpdate: Date.now(),
   lastManaUpdate: Date.now(),
   lessonProgress: {},
+  progress: {
+    duelWins: 0,
+    itemsPurchased: 0,
+    statUpgrades: 0,
+  },
+  claimedQuests: [],
 };
 
 const energyRegenerationInterval = 5 * 60 * 1000;
@@ -76,6 +85,10 @@ function loadPlayer() {
         ...initialPlayer.lessonProgress,
         ...savedData.lessonProgress,
       },
+      progress: { ...initialPlayer.progress, ...savedData.progress },
+      claimedQuests: Array.isArray(savedData.claimedQuests)
+        ? savedData.claimedQuests
+        : initialPlayer.claimedQuests,
     };
     const updatedPlayer = updateEnergy(player, Date.now());
     const updatedManaPlayer = updateMana(updatedPlayer, Date.now());
@@ -246,6 +259,10 @@ function App() {
       ...player,
       gold: player.gold - item.price,
       inventory: nextInventory,
+      progress: {
+        ...player.progress,
+        itemsPurchased: player.progress.itemsPurchased + 1,
+      },
     });
     setMessage(`${item.name} bekerült a táskádba.`);
   }
@@ -285,6 +302,10 @@ function App() {
       stats: {
         ...player.stats,
         [stat]: currentBaseStat + 1,
+      },
+      progress: {
+        ...player.progress,
+        statUpgrades: player.progress.statUpgrades + 1,
       },
     });
     setMessage("A képességed egy ponttal megerősödött.");
@@ -363,11 +384,39 @@ function App() {
       ...player,
       ...getLevelProgression(nextLevel, nextXp),
       gold: player.gold + enemy.goldReward,
+      progress: {
+        ...player.progress,
+        duelWins: player.progress.duelWins + 1,
+      },
     });
     return {
       leveledUp: nextLevel > player.level,
       newLevel: nextLevel,
     };
+  }
+
+  function claimQuestReward(quest) {
+    if (
+      player.claimedQuests.includes(quest.id) ||
+      !getQuestProgress(quest, player).isComplete
+    ) {
+      return;
+    }
+
+    let nextLevel = player.level;
+    let nextXp = player.xp + quest.rewards.xp;
+    while (nextXp >= getXpRequiredForLevel(nextLevel)) {
+      nextXp -= getXpRequiredForLevel(nextLevel);
+      nextLevel += 1;
+    }
+
+    // The claimed ID is persisted with the reward so it can only be paid once.
+    persistPlayer({
+      ...player,
+      ...getLevelProgression(nextLevel, nextXp),
+      gold: player.gold + quest.rewards.gold,
+      claimedQuests: [...player.claimedQuests, quest.id],
+    });
   }
 
   const energyCountdown = getEnergyCountdown(player, currentTime);
@@ -443,6 +492,16 @@ function App() {
                 spells={spells}
                 enemies={enemies}
                 onAwardRewards={awardDuelRewards}
+              />
+            }
+          />
+          <Route
+            path="/quests"
+            element={
+              <QuestsPage
+                player={player}
+                quests={quests}
+                onClaimQuestReward={claimQuestReward}
               />
             }
           />
