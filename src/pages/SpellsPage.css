@@ -6,6 +6,37 @@
   color: var(--muted);
   font-size: 14px;
 }
+.prepared-spells-panel {
+  margin-bottom: 22px;
+}
+.prepared-spells-panel > p:not(.eyebrow) {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.prepared-spell-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.prepared-spell-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  color: var(--red);
+  background: rgba(255, 249, 226, 0.55);
+  font-weight: bold;
+}
+.spellbook-message {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--gold);
+  color: var(--red);
+  background: rgba(255, 249, 226, 0.65);
+  font-weight: bold;
+}
 .spell-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

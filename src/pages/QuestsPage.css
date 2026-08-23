@@ -10,6 +10,12 @@
   color: var(--red);
   font-weight: bold;
 }
+.academy-complete-toggle {
+  margin-bottom: 0;
+}
+.academy-complete-quests {
+  margin-top: 18px;
+}
 .quest-heading,
 .quest-footer {
   display: flex;
@@ -32,12 +38,36 @@
   color: var(--muted);
   font-style: italic;
 }
-.quest-claimed > p:not(.eyebrow),
-.quest-claimed .quest-objectives {
+.quest-collapsed > p:not(.eyebrow),
+.quest-collapsed .quest-objectives,
+.quest-collapsed .quest-footer,
+.quest-collapsed .quest-complete {
   display: none;
 }
-.quest-claimed .quest-footer {
+.quest-collapsed .quest-footer {
   margin-top: 18px;
+}
+.quest-toggle {
+  margin-left: auto;
+}
+.quest-archived.quest-collapsed {
+  padding-block: 14px;
+}
+.quest-archived.quest-collapsed .quest-heading {
+  align-items: center;
+}
+.quest-archived.quest-collapsed .quest-heading .eyebrow {
+  display: none;
+}
+.quest-archived.quest-collapsed .quest-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.quest-archived .quest-toggle {
+  min-width: 28px;
+  padding: 4px;
+  font-size: 18px;
+  line-height: 1;
 }
 .quest > p:not(.eyebrow) {
   margin: 18px 0 24px;

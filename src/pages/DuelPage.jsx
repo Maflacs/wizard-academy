@@ -47,21 +47,24 @@ function getAttackDamage(spell, effectiveStats) {
 }
 
 function getUsablePlayerActions(player, spells, state) {
-  const actions = [basicAttack];
+  const preparedActions = [];
+  const preparedSpellIds = player.preparedSpells || [];
   spells.forEach((spell) => {
     if (
+      !preparedSpellIds.includes(spell.id) ||
       !player.knownSpells.includes(spell.id) ||
       player.level < spell.requiredLevel ||
       state.combatMana < spell.manaCost
     )
       return;
     if (spell.type === "shield" && state.combatShield < spell.shieldAmount)
-      actions.push(spell);
+      preparedActions.push(spell);
     if (spell.type === "heal" && state.combatHealth < state.maxHealth * 0.75)
-      actions.push(spell);
-    if (spell.type === "attack") actions.push(spell);
+      preparedActions.push(spell);
+    if (spell.type === "attack") preparedActions.push(spell);
   });
-  return actions;
+  // Wand Strike is implicit only when no prepared spell can currently be used.
+  return preparedActions.length > 0 ? preparedActions : [basicAttack];
 }
 
 function performEnemyAction(state, effectiveStats, addLog) {
@@ -179,14 +182,17 @@ function DuelPage({
   const effectiveStats = getEffectiveStats(player, items);
   const combatMaxHealth = getMaxHealthForLevel(player.level);
   const combatMaxMana = getMaxManaForLevel(player.level);
-  const availableSpells = [
-    basicAttack,
-    ...spells.filter(
+  const availableSpells = (player.preparedSpells || [])
+    .map((spellId) => spells.find((spell) => spell.id === spellId))
+    .filter(
       (spell) =>
+        spell &&
         player.knownSpells.includes(spell.id) &&
         ["attack", "shield", "heal"].includes(spell.type),
-    ),
-  ];
+    );
+  const usableActions = getUsablePlayerActions(player, availableSpells, duel);
+  const showFallback =
+    usableActions.length === 1 && usableActions[0].id === basicAttack.id;
 
   function addLog(entry) {
     setCombatLog((currentLog) => [...currentLog, entry]);
@@ -380,6 +386,20 @@ function DuelPage({
                   </button>
                 </article>
               ))}
+              {showFallback && (
+                <article className="parchment-panel spell-action spell-fallback">
+                  <h3>{basicAttack.name}</h3>
+                  <p>Nincs elég manád a bekészített varázslatokhoz.</p>
+                  <p>Manaigény: 0</p>
+                  <button
+                    className="button"
+                    type="button"
+                    onClick={() => castSpell(basicAttack)}
+                  >
+                    Varázslás
+                  </button>
+                </article>
+              )}
             </div>
           </div>
           <button

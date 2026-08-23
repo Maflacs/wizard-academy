@@ -37,6 +37,7 @@ const initialPlayer = {
   lastHealthUpdate: Date.now(),
   isResting: false,
   knownSpells: ["spark-bolt"],
+  preparedSpells: ["spark-bolt"],
   inventory: [],
   stats: {
     magicPower: 5,
@@ -92,6 +93,15 @@ function loadPlayer() {
           : savedData.lastHealthUpdate || Date.now(),
       isResting: savedData.isResting === true,
       knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
+      preparedSpells: Array.isArray(savedData.preparedSpells)
+        ? savedData.preparedSpells
+            .filter((spellId) =>
+              (savedData.knownSpells || initialPlayer.knownSpells).includes(
+                spellId,
+              ),
+            )
+            .slice(0, 3)
+        : (savedData.knownSpells || initialPlayer.knownSpells).slice(0, 3),
       lessonProgress: {
         ...initialPlayer.lessonProgress,
         ...savedData.lessonProgress,
@@ -290,6 +300,22 @@ function App() {
       equipment: { ...player.equipment, [item.slot]: item.id },
     });
     notify(`${item.name} felszerelve.`, "success");
+  }
+
+  function updatePreparedSpells(spellId, shouldPrepare) {
+    if (!player.knownSpells.includes(spellId)) return false;
+    const preparedSpells = shouldPrepare
+      ? player.preparedSpells.includes(spellId)
+        ? player.preparedSpells
+        : player.preparedSpells.length >= 3
+          ? null
+          : [...player.preparedSpells, spellId]
+      : player.preparedSpells.filter(
+          (preparedSpellId) => preparedSpellId !== spellId,
+        );
+    if (!preparedSpells) return false;
+    persistPlayer({ ...player, preparedSpells });
+    return true;
   }
 
   function upgradeStat(stat) {
@@ -554,8 +580,10 @@ function App() {
             element={
               <SpellsPage
                 knownSpells={player.knownSpells}
+                preparedSpells={player.preparedSpells}
                 spells={spells}
                 player={player}
+                onUpdatePreparedSpells={updatePreparedSpells}
               />
             }
           />

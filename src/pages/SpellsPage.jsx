@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import "./SpellsPage.css";
 import { getMaxManaForLevel } from "../utils/playerProgression";
 
@@ -8,11 +9,30 @@ const spellTypeLabels = {
   utility: "Segédmágia",
 };
 
-function SpellsPage({ knownSpells, spells, player }) {
+function SpellsPage({
+  knownSpells,
+  preparedSpells,
+  spells,
+  player,
+  onUpdatePreparedSpells,
+}) {
+  const [message, setMessage] = useState("");
   const maxMana = getMaxManaForLevel(player.level);
   const learnedSpells = knownSpells
     .map((spellId) => spells.find((spell) => spell.id === spellId))
     .filter((spell) => spell);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timeoutId = setTimeout(() => setMessage(""), 3000);
+    return () => clearTimeout(timeoutId);
+  }, [message]);
+
+  function updatePreparedSpell(spellId, shouldPrepare) {
+    if (!onUpdatePreparedSpells(spellId, shouldPrepare) && shouldPrepare) {
+      setMessage("Legfeljebb 3 varázslatot készíthetsz be.");
+    }
+  }
 
   return (
     <section className="page spells-page">
@@ -20,6 +40,27 @@ function SpellsPage({ knownSpells, spells, player }) {
       <h2>Varázskönyv</h2>
       <p className="lead">Az elsajátított varázslatok és azok titkai.</p>
       <p className="spell-mana">Mana párbajban: {maxMana}</p>
+      <div className="parchment-panel prepared-spells-panel">
+        <p className="eyebrow">Bekészített varázsigék</p>
+        <p>Legfeljebb 3 varázsigét használhatsz a párbajokban.</p>
+        <div className="prepared-spell-slots">
+          {preparedSpells.map((spellId) => {
+            const spell = spells.find((candidate) => candidate.id === spellId);
+            return spell ? (
+              <span className="prepared-spell-slot" key={spell.id}>
+                {spell.name}
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => updatePreparedSpell(spell.id, false)}
+                >
+                  Kiveszem
+                </button>
+              </span>
+            ) : null;
+          })}
+        </div>
+      </div>
       {learnedSpells.length === 0 ? (
         <p className="spellbook-empty">
           Még egyetlen varázslatot sem sajátítottál el.
@@ -59,9 +100,32 @@ function SpellsPage({ knownSpells, spells, player }) {
                   <dd>{spell.requiredLevel}</dd>
                 </div>
               </dl>
+              {preparedSpells.includes(spell.id) ? (
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => updatePreparedSpell(spell.id, false)}
+                >
+                  Kiveszem
+                </button>
+              ) : (
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => updatePreparedSpell(spell.id, true)}
+                  disabled={preparedSpells.length >= 3}
+                >
+                  Bekészítem
+                </button>
+              )}
             </article>
           ))}
         </div>
+      )}
+      {message && (
+        <p className="spellbook-message" role="status" aria-live="polite">
+          {message}
+        </p>
       )}
     </section>
   );
