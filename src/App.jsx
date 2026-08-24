@@ -67,6 +67,7 @@ const initialPlayer = {
 };
 
 const energyRegenerationInterval = 5 * 60 * 1000;
+const obsoleteSpellIds = new Set(["protective-shell"]);
 
 function captureUnlockedQuestBaselines(player) {
   const questBaselines = { ...(player.questBaselines || {}) };
@@ -114,6 +115,18 @@ function loadPlayer() {
       lastManaUpdate: _lastManaUpdate,
       ...savedFields
     } = savedData;
+    const knownSpells = (
+      Array.isArray(savedData.knownSpells)
+        ? savedData.knownSpells
+        : initialPlayer.knownSpells
+    ).filter((spellId) => !obsoleteSpellIds.has(spellId));
+    const preparedSpells = (
+      Array.isArray(savedData.preparedSpells)
+        ? savedData.preparedSpells
+        : knownSpells
+    )
+      .filter((spellId) => knownSpells.includes(spellId))
+      .slice(0, 3);
     const player = {
       ...initialPlayer,
       ...savedFields,
@@ -132,16 +145,8 @@ function loadPlayer() {
           ? Date.now()
           : savedData.lastHealthUpdate || Date.now(),
       isResting: savedData.isResting === true,
-      knownSpells: savedData.knownSpells || initialPlayer.knownSpells,
-      preparedSpells: Array.isArray(savedData.preparedSpells)
-        ? savedData.preparedSpells
-            .filter((spellId) =>
-              (savedData.knownSpells || initialPlayer.knownSpells).includes(
-                spellId,
-              ),
-            )
-            .slice(0, 3)
-        : (savedData.knownSpells || initialPlayer.knownSpells).slice(0, 3),
+      knownSpells,
+      preparedSpells,
       lessonProgress: migrateLessonProgress(savedData.lessonProgress),
       progress: { ...initialPlayer.progress, ...savedData.progress },
       claimedQuests: Array.isArray(savedData.claimedQuests)

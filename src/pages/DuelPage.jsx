@@ -21,6 +21,38 @@ function chooseRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function chooseWeightedAutoAction(actions, state, previousActionType) {
+  const hasPreparedAttack = actions.some((action) => action.type === "attack");
+  const eligibleActions =
+    previousActionType === "shield" && hasPreparedAttack
+      ? actions.filter((action) => action.type !== "shield")
+      : actions;
+  const healthRatio = state.combatHealth / state.maxHealth;
+  const weightedActions = eligibleActions.map((action) => {
+    let weight = 1;
+    if (action.type === "attack" || action.id === basicAttack.id) {
+      weight = healthRatio > 0.75 ? 5 : healthRatio >= 0.4 ? 3 : 2;
+    } else if (action.type === "shield") {
+      weight = healthRatio > 0.75 ? 1 : healthRatio >= 0.4 ? 3 : 5;
+    } else if (action.type === "heal") {
+      weight = healthRatio >= 0.4 ? 4 : 6;
+    }
+    return { action, weight };
+  });
+  const totalWeight = weightedActions.reduce(
+    (total, candidate) => total + candidate.weight,
+    0,
+  );
+  let roll = Math.random() * totalWeight;
+
+  for (const candidate of weightedActions) {
+    roll -= candidate.weight;
+    if (roll < 0) return candidate.action;
+  }
+
+  return weightedActions[weightedActions.length - 1].action;
+}
+
 function getDuelBlockMessage({
   isExamMode,
   examCompleted,
@@ -52,6 +84,7 @@ function createDuelState(enemy, playerLevel, playerHealth) {
     combatShield: 0,
     combatShieldName: null,
     enemyShield: 0,
+    enemyShieldCooldown: 0,
   };
 }
 
@@ -91,7 +124,8 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       preparedActions.push(spell);
     if (
       spell.type === "heal" &&
-      state.combatHealth < (automatic ? state.maxHealth * 0.75 : state.maxHealth)
+      state.combatHealth <
+        (automatic ? state.maxHealth * 0.75 : state.maxHealth)
     )
       preparedActions.push(spell);
     if (spell.type === "attack") preparedActions.push(spell);
@@ -101,10 +135,28 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
 }
 
 function performEnemyAction(state, effectiveStats, addLog) {
-  const action = chooseEnemyAction(state.scaledEnemy);
+  const shieldOnCooldown = state.enemyShieldCooldown > 0;
+  if (shieldOnCooldown) state.enemyShieldCooldown -= 1;
+  const availableActions = state.scaledEnemy.actions?.filter((action) => {
+    if (action.type !== "shield") return true;
+    const shieldAmount = action.shieldAmount || 10;
+    return !shieldOnCooldown && state.enemyShield <= shieldAmount * 0.5;
+  });
+  const action = chooseEnemyAction({
+    ...state.scaledEnemy,
+    actions: availableActions,
+  });
   if (action.type === "shield") {
-    state.enemyShield += action.shieldAmount || 10;
-    addLog(`${state.scaledEnemy.name} mágikus védőburkot vont maga köré.`);
+    const hadShield = state.enemyShield > 0;
+    state.enemyShield = applyShield(state.enemyShield, {
+      shieldAmount: action.shieldAmount || 10,
+    });
+    state.enemyShieldCooldown = 1;
+    addLog(
+      hadShield
+        ? `${state.scaledEnemy.name} megerősítette mágikus védőburkát. Pajzs ereje: ${state.enemyShield}.`
+        : `${state.scaledEnemy.name} mágikus védőburkot vont maga köré. Pajzs ereje: ${state.enemyShield}.`,
+    );
     return;
   }
   if (
@@ -162,10 +214,35 @@ function performEnemyAction(state, effectiveStats, addLog) {
 function performPlayerAttack(state, spell, effectiveStats, addLog) {
   const result = getAttackDamage(spell, effectiveStats);
   const damage = typeof result === "number" ? result : result.damage;
-  const blocked = Math.min(state.enemyShield, damage);
-  state.enemyShield -= blocked;
-  state.enemyHealth = Math.max(0, state.enemyHealth - damage + blocked);
-  addLog(`${spell.name} ${damage} sebzést okozott.`);
+  if (state.enemyShield > 0) {
+    const shieldResult = resolveShieldDamage(state.enemyShield, damage);
+    const enemyHealthBeforeAttack = state.enemyHealth;
+    state.enemyShield = shieldResult.remainingShield;
+    state.enemyHealth = Math.max(
+      0,
+      state.enemyHealth - shieldResult.healthDamage,
+    );
+    const actualHealthDamage = enemyHealthBeforeAttack - state.enemyHealth;
+    addLog(
+      shieldResult.remainingShield > 0
+        ? `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott.`
+        : `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott és szertefoszlott.`,
+    );
+    if (actualHealthDamage > 0) {
+      addLog(
+        `${spell.name} ${actualHealthDamage} sebzést okozott ${state.scaledEnemy.name} ellen.`,
+      );
+    } else {
+      addLog(
+        shieldResult.remainingShield > 0
+          ? `A támadás nem jutott át a pajzson. Maradék pajzs: ${shieldResult.remainingShield}.`
+          : "A támadás nem jutott át a pajzson.",
+      );
+    }
+  } else {
+    state.enemyHealth = Math.max(0, state.enemyHealth - damage);
+    addLog(`${spell.name} ${damage} sebzést okozott.`);
+  }
 
   if (spell.healAmount !== undefined) {
     const healed = Math.min(
@@ -173,8 +250,7 @@ function performPlayerAttack(state, spell, effectiveStats, addLog) {
       state.maxHealth - state.combatHealth,
     );
     state.combatHealth += healed;
-    if (healed > 0)
-      addLog(`${spell.name} ${healed} életerőt állított helyre.`);
+    if (healed > 0) addLog(`${spell.name} ${healed} életerőt állított helyre.`);
   }
 }
 
@@ -182,13 +258,14 @@ function simulateDuel(player, spells, items, duelState) {
   const state = { ...duelState };
   const effectiveStats = getEffectiveStats(player, items);
   const log = [];
+  let previousActionType = null;
   const addLog = (entry) => {
     log.push(entry);
   };
 
   for (let turn = 0; turn < maxAutoTurns; turn += 1) {
     const actions = getUsablePlayerActions(player, spells, state, true);
-    const action = chooseRandom(actions);
+    const action = chooseWeightedAutoAction(actions, state, previousActionType);
     state.combatMana -= action.manaCost;
     if (action.type === "attack" || action.id === basicAttack.id) {
       performPlayerAttack(state, action, effectiveStats, addLog);
@@ -209,6 +286,7 @@ function simulateDuel(player, spells, items, duelState) {
       state.combatHealth += healed;
       addLog(`${action.name} ${healed} életerőt állított helyre.`);
     }
+    previousActionType = action.type || "attack";
     if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
     performEnemyAction(state, effectiveStats, addLog);
     if (state.combatHealth <= 0) return { ...state, status: "defeat", log };
@@ -524,15 +602,15 @@ function DuelPage({
               ? blockMessage
               : needsInfirmary
                 ? "Életerőd elfogyott. Új párbaj előtt fel kell gyógyulnod."
-              : isExamMode && duelStatus === "victory"
-                ? "A vizsga sikerült!"
-                : isExamMode && duelStatus === "defeat"
-                  ? "A vizsga nem sikerült. Felkészülhetsz, majd újra próbálkozhatsz."
-                  : duelStatus === "victory"
-                    ? "Győzedelmeskedtél!"
-                    : duelStatus === "defeat"
-                      ? "Vereség."
-                      : "Döntetlen."}
+                : isExamMode && duelStatus === "victory"
+                  ? "A vizsga sikerült!"
+                  : isExamMode && duelStatus === "defeat"
+                    ? "A vizsga nem sikerült. Felkészülhetsz, majd újra próbálkozhatsz."
+                    : duelStatus === "victory"
+                      ? "Győzedelmeskedtél!"
+                      : duelStatus === "defeat"
+                        ? "Vereség."
+                        : "Döntetlen."}
           </strong>
           {needsInfirmary ? (
             <button

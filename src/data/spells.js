@@ -10,16 +10,6 @@ const spells = [
     type: "attack",
   },
   {
-    id: "protective-shell",
-    name: "Védőburok",
-    description:
-      "Mágikus pajzsot von köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy. A pajzs nem halmozódik.",
-    manaCost: 10,
-    shieldAmount: 10,
-    requiredLevel: 1,
-    type: "shield",
-  },
-  {
     id: "glow-orb",
     name: "Fénygömb",
     description: "Lebegő fénygömböt idéz, amely bevilágítja a sötét folyosókat.",
@@ -111,7 +101,7 @@ const spells = [
     description:
       "Erősebb mágikus pajzsot von köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy. A pajzs nem halmozódik.",
     manaCost: 18,
-    shieldAmount: 18,
+    shieldAmount: 30,
     requiredLevel: 5,
     requiredAcademyYear: 2,
     type: "shield",
