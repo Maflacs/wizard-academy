@@ -72,12 +72,14 @@
   color: var(--red);
   font-weight: bold;
 }
-.shield-mechanics {
+.shield-mechanics,
+.spell-mechanics {
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.spell-card .shield-mechanics p {
+.spell-card .shield-mechanics p,
+.spell-card .spell-mechanics p {
   margin: 5px 0;
   color: var(--muted);
   font-size: 13px;

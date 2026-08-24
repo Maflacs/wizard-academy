@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./SpellsPage.css";
 import { getMaxManaForLevel } from "../utils/playerProgression";
+import { formatAcademyYear } from "../utils/academy";
 
 const spellTypeLabels = {
   attack: "Támadó",
@@ -77,13 +78,19 @@ function SpellsPage({
                   <dt>Típus</dt>
                   <dd>{spellTypeLabels[spell.type]}</dd>
                 </div>
+                {spell.requiredAcademyYear > 1 && (
+                  <div>
+                    <dt>Évfolyam</dt>
+                    <dd>{formatAcademyYear(spell.requiredAcademyYear)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Manaigény</dt>
                   <dd>{spell.manaCost}</dd>
                 </div>
                 {spell.basePower !== undefined && (
                   <div>
-                    <dt>Alaperő</dt>
+                    <dt>Alapsebzés</dt>
                     <dd>{spell.basePower}</dd>
                   </div>
                 )}
@@ -119,6 +126,14 @@ function SpellsPage({
                   <p>
                     <strong>Újravarázslás:</strong> a sérült pajzsot legfeljebb
                     a varázslat teljes pajzserősségéig tölti vissza.
+                  </p>
+                </div>
+              )}
+              {spell.type === "attack" && spell.healAmount !== undefined && (
+                <div className="spell-mechanics">
+                  <p>
+                    A varázslat támadáskor a feltüntetett értékkel gyógyít, de
+                    az életerőt nem emelheti a maximum fölé.
                   </p>
                 </div>
               )}

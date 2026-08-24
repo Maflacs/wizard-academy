@@ -11,6 +11,7 @@ import {
   getMaxHealthForLevel,
   getMaxManaForLevel,
 } from "../utils/playerProgression";
+import { getAcademyYear } from "../utils/academy";
 import "./DuelPage.css";
 
 const basicAttack = { id: "basic-attack", name: "Pálcaütés", manaCost: 0 };
@@ -18,6 +19,24 @@ const maxAutoTurns = 100;
 
 function chooseRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function getDuelBlockMessage({
+  isExamMode,
+  examCompleted,
+  health,
+  isResting,
+  examReady,
+}) {
+  if (isExamMode && examCompleted)
+    return "Ezt a vizsgát már sikeresen teljesítetted.";
+  if (health <= 0)
+    return "Túl sérült vagy a párbajhoz. Előbb fel kell gyógyulnod.";
+  if (isResting)
+    return "A karaktered a Gyengélkedőn pihen. Előbb keltsd fel, hogy folytathasd.";
+  if (isExamMode && !examReady)
+    return "A vizsga feltételei még nem teljesültek.";
+  return null;
 }
 
 function createDuelState(enemy, playerLevel, playerHealth) {
@@ -59,6 +78,7 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       !preparedSpellIds.includes(spell.id) ||
       !player.knownSpells.includes(spell.id) ||
       player.level < spell.requiredLevel ||
+      getAcademyYear(player) < (spell.requiredAcademyYear ?? 1) ||
       state.combatMana < spell.manaCost
     )
       return;
@@ -139,6 +159,25 @@ function performEnemyAction(state, effectiveStats, addLog) {
   );
 }
 
+function performPlayerAttack(state, spell, effectiveStats, addLog) {
+  const result = getAttackDamage(spell, effectiveStats);
+  const damage = typeof result === "number" ? result : result.damage;
+  const blocked = Math.min(state.enemyShield, damage);
+  state.enemyShield -= blocked;
+  state.enemyHealth = Math.max(0, state.enemyHealth - damage + blocked);
+  addLog(`${spell.name} ${damage} sebzést okozott.`);
+
+  if (spell.healAmount !== undefined) {
+    const healed = Math.min(
+      spell.healAmount,
+      state.maxHealth - state.combatHealth,
+    );
+    state.combatHealth += healed;
+    if (healed > 0)
+      addLog(`${spell.name} ${healed} életerőt állított helyre.`);
+  }
+}
+
 function simulateDuel(player, spells, items, duelState) {
   const state = { ...duelState };
   const effectiveStats = getEffectiveStats(player, items);
@@ -152,12 +191,7 @@ function simulateDuel(player, spells, items, duelState) {
     const action = chooseRandom(actions);
     state.combatMana -= action.manaCost;
     if (action.type === "attack" || action.id === basicAttack.id) {
-      const result = getAttackDamage(action, effectiveStats);
-      const damage = typeof result === "number" ? result : result.damage;
-      const blocked = Math.min(state.enemyShield, damage);
-      state.enemyShield -= blocked;
-      state.enemyHealth = Math.max(0, state.enemyHealth - damage + blocked);
-      addLog(`${action.name} ${damage} sebzést okozott.`);
+      performPlayerAttack(state, action, effectiveStats, addLog);
     } else if (action.type === "shield") {
       const hadShield = state.combatShield > 0;
       state.combatShield = applyShield(state.combatShield, action);
@@ -200,10 +234,14 @@ function DuelPage({
   const examOpponent = enemies.find((enemy) => enemy.isExamOpponent);
   const normalEnemies = enemies.filter((enemy) => !enemy.isExamOpponent);
   const examCompleted = player.completedMilestones.includes("first-exam");
-  const canStartDuel =
-    player.health > 0 &&
-    !isResting &&
-    (!isExamMode || (!examCompleted && examReady));
+  const blockMessage = getDuelBlockMessage({
+    isExamMode,
+    examCompleted,
+    health: player.health,
+    isResting,
+    examReady,
+  });
+  const canStartDuel = blockMessage === null;
   const [duel, setDuel] = useState(() =>
     createDuelState(
       isExamMode ? examOpponent : chooseRandom(normalEnemies),
@@ -212,7 +250,9 @@ function DuelPage({
     ),
   );
   const [combatLog, setCombatLog] = useState([
-    `${duel.scaledEnemy.name} megjelent a párbajban.`,
+    canStartDuel
+      ? `${duel.scaledEnemy.name} megjelent a párbajban.`
+      : blockMessage,
   ]);
   const [duelStatus, setDuelStatus] = useState(
     canStartDuel ? "active" : "blocked",
@@ -228,11 +268,13 @@ function DuelPage({
       (spell) =>
         spell &&
         player.knownSpells.includes(spell.id) &&
+        getAcademyYear(player) >= (spell.requiredAcademyYear ?? 1) &&
         ["attack", "shield", "heal"].includes(spell.type),
     );
   const usableActions = getUsablePlayerActions(player, availableSpells, duel);
   const showFallback =
     usableActions.length === 1 && usableActions[0].id === basicAttack.id;
+  const needsInfirmary = player.health <= 0 || duel.combatHealth <= 0;
 
   function addLog(entry) {
     setCombatLog((currentLog) => [...currentLog, entry]);
@@ -241,15 +283,7 @@ function DuelPage({
   function startNewDuel() {
     if (!canStartDuel) {
       setDuelStatus("blocked");
-      setCombatLog([
-        examCompleted
-          ? "Ezt a vizsgát már sikeresen teljesítetted."
-          : player.health <= 0
-            ? "Túl sérült vagy a párbajhoz. Előbb fel kell gyógyulnod."
-            : isResting
-              ? "A karaktered a Gyengélkedőn pihen. Előbb keltsd fel, hogy folytathasd."
-              : "A vizsga feltételei még nem teljesültek.",
-      ]);
+      setCombatLog([blockMessage]);
       return;
     }
     const nextDuel = createDuelState(
@@ -291,24 +325,15 @@ function DuelPage({
       duel.combatMana < spell.manaCost ||
       (spell.id !== basicAttack.id &&
         (!player.knownSpells.includes(spell.id) ||
-          player.level < spell.requiredLevel)) ||
+          player.level < spell.requiredLevel ||
+          getAcademyYear(player) < (spell.requiredAcademyYear ?? 1))) ||
       (spell.type === "shield" && duel.combatShield >= spell.shieldAmount) ||
       (spell.type === "heal" && duel.combatHealth >= combatMaxHealth)
     )
       return;
     const nextDuel = { ...duel, combatMana: duel.combatMana - spell.manaCost };
     if (spell.type === "attack" || spell.id === basicAttack.id) {
-      const result = getAttackDamage(spell, effectiveStats);
-      const damage = typeof result === "number" ? result : result.damage;
-      const blocked = Math.min(nextDuel.enemyShield, damage);
-      nextDuel.enemyShield -= blocked;
-      nextDuel.enemyHealth = Math.max(
-        0,
-        nextDuel.enemyHealth - damage + blocked,
-      );
-      addLog(
-        `${spell.name} varázslatot használtál, és ${damage} sebzést okoztál.`,
-      );
+      performPlayerAttack(nextDuel, spell, effectiveStats, addLog);
     } else if (spell.type === "shield") {
       const hadShield = nextDuel.combatShield > 0;
       nextDuel.combatShield = applyShield(nextDuel.combatShield, spell);
@@ -421,6 +446,10 @@ function DuelPage({
                   ) : (
                     <p>Gyógyítás: {spell.healAmount}</p>
                   )}
+                  {spell.type === "attack" &&
+                    spell.healAmount !== undefined && (
+                      <p>Gyógyítás: {spell.healAmount}</p>
+                    )}
                   <p>Manaigény: {spell.manaCost}</p>
                   <button
                     className="button"
@@ -492,11 +521,9 @@ function DuelPage({
         <div className="duel-result">
           <strong>
             {duelStatus === "blocked"
-              ? examCompleted
-                ? "Ezt a vizsgát már teljesítetted."
-                : player.health <= 0
-                  ? "Túl sérült vagy a harchoz."
-                  : "A vizsga feltételei még nem teljesültek."
+              ? blockMessage
+              : needsInfirmary
+                ? "Életerőd elfogyott. Új párbaj előtt fel kell gyógyulnod."
               : isExamMode && duelStatus === "victory"
                 ? "A vizsga sikerült!"
                 : isExamMode && duelStatus === "defeat"
@@ -507,7 +534,15 @@ function DuelPage({
                       ? "Vereség."
                       : "Döntetlen."}
           </strong>
-          {duelStatus === "blocked" ? null : isExamMode &&
+          {needsInfirmary ? (
+            <button
+              className="button"
+              type="button"
+              onClick={() => navigate("/infirmary")}
+            >
+              Irány a Gyengélkedő
+            </button>
+          ) : duelStatus === "blocked" ? null : isExamMode &&
             duelStatus === "victory" ? (
             <button
               className="button"

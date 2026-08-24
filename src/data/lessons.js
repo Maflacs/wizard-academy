@@ -7,8 +7,9 @@ const lessons = [
     energyCost: 20,
     xpReward: 35,
     spellUnlocks: [
-      { spellId: "wind-blade", requiredAttendances: 3 },
-      { spellId: "force-pulse", requiredAttendances: 6 },
+      { spellId: "wind-blade", academicYear: 1, requiredAttendances: 3 },
+      { spellId: "force-pulse", academicYear: 1, requiredAttendances: 6 },
+      { spellId: "rune-lance", academicYear: 2, requiredAttendances: 3 },
     ],
   },
   {
@@ -19,8 +20,9 @@ const lessons = [
     energyCost: 15,
     xpReward: 25,
     spellUnlocks: [
-      { spellId: "biting-vine", requiredAttendances: 3 },
-      { spellId: "thorn-root", requiredAttendances: 6 },
+      { spellId: "biting-vine", academicYear: 1, requiredAttendances: 3 },
+      { spellId: "thorn-root", academicYear: 1, requiredAttendances: 6 },
+      { spellId: "draining-vine", academicYear: 2, requiredAttendances: 3 },
     ],
   },
   {
@@ -31,8 +33,13 @@ const lessons = [
     energyCost: 30,
     xpReward: 50,
     spellUnlocks: [
-      { spellId: "guardian-shield", requiredAttendances: 3 },
-      { spellId: "healing-light", requiredAttendances: 6 },
+      { spellId: "guardian-shield", academicYear: 1, requiredAttendances: 3 },
+      { spellId: "healing-light", academicYear: 1, requiredAttendances: 6 },
+      {
+        spellId: "reinforced-ward",
+        academicYear: 2,
+        requiredAttendances: 3,
+      },
     ],
   },
 ];

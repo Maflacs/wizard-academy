@@ -16,6 +16,10 @@
 .academy-complete-quests {
   margin-top: 18px;
 }
+.current-academy-year {
+  margin: 0 0 18px;
+  color: var(--red);
+}
 .quest-heading,
 .quest-footer {
   display: flex;

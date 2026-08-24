@@ -82,6 +82,40 @@ const spells = [
     requiredLevel: 1,
     type: "heal",
   },
+  {
+    id: "rune-lance",
+    name: "Rúnalándzsa",
+    description:
+      "Egy sűrített mágikus rúnát lő az ellenfél felé, amely nagy erejű egyszeri sebzést okoz.",
+    manaCost: 22,
+    basePower: 34,
+    requiredLevel: 5,
+    requiredAcademyYear: 2,
+    type: "attack",
+  },
+  {
+    id: "draining-vine",
+    name: "Életszívó inda",
+    description:
+      "Egy mágikus inda az ellenfél életerejéből táplálkozik, miközben kisebb mértékben gyógyítja használóját.",
+    manaCost: 18,
+    basePower: 22,
+    healAmount: 6,
+    requiredLevel: 5,
+    requiredAcademyYear: 2,
+    type: "attack",
+  },
+  {
+    id: "reinforced-ward",
+    name: "Megerősített őrzés",
+    description:
+      "Erősebb mágikus pajzsot von köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy. A pajzs nem halmozódik.",
+    manaCost: 18,
+    shieldAmount: 18,
+    requiredLevel: 5,
+    requiredAcademyYear: 2,
+    type: "shield",
+  },
 ];
 
 export default spells;

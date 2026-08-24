@@ -1,5 +1,7 @@
 import "./LessonsPage.css";
 import spells from "../data/spells";
+import { formatAcademyYear, getAcademyYear } from "../utils/academy";
+import { getLessonAttendance } from "../utils/lessonProgress";
 
 function LessonsPage({
   lessons,
@@ -8,6 +10,8 @@ function LessonsPage({
   energyStatus,
   isResting,
 }) {
+  const academyYear = getAcademyYear(player);
+
   return (
     <section className="page">
       <p className="eyebrow">Az akadémia órarendje</p>
@@ -33,8 +37,14 @@ function LessonsPage({
                 XP
               </p>
               {(() => {
-                const attendanceCount = player.lessonProgress[lesson.id] || 0;
-                const unlocks = lesson.spellUnlocks || [];
+                const attendanceCount = getLessonAttendance(
+                  player,
+                  lesson.id,
+                  academyYear,
+                );
+                const unlocks = (lesson.spellUnlocks || []).filter(
+                  (unlock) => (unlock.academicYear ?? 1) === academyYear,
+                );
                 const nextUnlock = unlocks.find(
                   (unlock) => !player.knownSpells.includes(unlock.spellId),
                 );
@@ -43,20 +53,19 @@ function LessonsPage({
                   : null;
                 return (
                   <div className="lesson-progression">
+                    <p>
+                      {formatAcademyYear(academyYear)} évfolyamos részvételek:{" "}
+                      {attendanceCount}
+                      {nextUnlock
+                        ? ` / ${nextUnlock.requiredAttendances}`
+                        : ""}
+                    </p>
                     {nextUnlock ? (
-                      <>
-                        <p>
-                          Tanulmányi haladás: {attendanceCount} /{" "}
-                          {nextUnlock.requiredAttendances}
-                        </p>
-                        <p>
-                          Következő megtanulható varázsige: {nextSpell?.name}
-                        </p>
-                      </>
+                      <p>Következő tananyag: {nextSpell?.name}</p>
                     ) : (
                       <p>
-                        Minden jelenlegi varázsigét megtanultál ebből a
-                        tantárgyból.
+                        Ehhez az évfolyamhoz jelenleg nincs további
+                        megtanulható varázsige ebből a tantárgyból.
                       </p>
                     )}
                     {unlocks
@@ -68,7 +77,9 @@ function LessonsPage({
                           (spell) => spell.id === unlock.spellId,
                         );
                         return (
-                          <p key={unlock.spellId}>{learnedSpell?.name} ✓</p>
+                          <p key={unlock.spellId}>
+                            {learnedSpell?.name}: Megtanulva ✓
+                          </p>
                         );
                       })}
                   </div>

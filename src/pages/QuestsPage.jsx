@@ -18,7 +18,7 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
     (_, index) => index + 1,
   );
   const currentQuests = quests.filter(
-    (quest) => getQuestAcademyYear(quest) >= academyYear,
+    (quest) => getQuestAcademyYear(quest) === academyYear,
   );
 
   function toggleYear(year) {
@@ -162,7 +162,7 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
       <p className="eyebrow">Az akadémia küldetései</p>
       <h2>Feladatok</h2>
       <p className="lead">
-        Rövid célok, amelyek végigvezetnek az akadémia első évén.
+        Rövid célok, amelyek végigvezetnek az akadémiai éveken.
       </p>
       {completedYears.map((year) => {
         const isExpanded = expandedYears.has(year);
@@ -189,6 +189,11 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
           </section>
         );
       })}
+      {currentQuests.length > 0 && (
+        <h3 className="current-academy-year">
+          {formatAcademyYear(academyYear)} évfolyam
+        </h3>
+      )}
       <div className="quest-list">
         {currentQuests.map((quest) => renderQuest(quest))}
       </div>

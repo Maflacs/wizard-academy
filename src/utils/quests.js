@@ -1,16 +1,33 @@
-function getObjectiveProgress(objective, player) {
+import {
+  getLessonAttendance,
+  getTotalLessonAttendance,
+} from "./lessonProgress";
+import { getAcademyYear } from "./academy";
+
+function getObjectiveProgress(objective, player, questId) {
   if (objective.type === "lessonAttendance") {
+    const academicYear = objective.academicYear ?? 1;
     if (objective.lessonId) {
-      return player.lessonProgress[objective.lessonId] || 0;
+      return getLessonAttendance(player, objective.lessonId, academicYear);
     }
-    return Object.values(player.lessonProgress).reduce(
-      (total, attendance) => total + attendance,
-      0,
-    );
+    return getTotalLessonAttendance(player, academicYear);
   }
 
   if (objective.type === "knownSpell") {
     return player.knownSpells.includes(objective.spellId) ? 1 : 0;
+  }
+  if (objective.type === "preparedSpell") {
+    return objective.spellIds.some((spellId) =>
+      player.preparedSpells.includes(spellId),
+    )
+      ? 1
+      : 0;
+  }
+  if (objective.type === "progressSinceQuestActivation") {
+    const current = player.progress[objective.progressKey] || 0;
+    const baseline = player.questBaselines?.[questId]?.[objective.progressKey];
+    if (!Number.isFinite(baseline) || baseline < 0) return 0;
+    return Math.max(0, current - baseline);
   }
   if (objective.type === "minimumBaseStat") {
     return player.stats[objective.stat] || 0;
@@ -28,7 +45,7 @@ function getQuestProgress(quest, player) {
     ...objective,
     current: Math.min(
       objective.required,
-      getObjectiveProgress(objective, player),
+      getObjectiveProgress(objective, player, quest.id),
     ),
   }));
   const completedObjectives = objectives.filter(
@@ -44,8 +61,9 @@ function getQuestProgress(quest, player) {
 
 function isQuestUnlocked(quest, player) {
   return (
-    !quest.prerequisiteQuestId ||
-    player.claimedQuests.includes(quest.prerequisiteQuestId)
+    getAcademyYear(player) >= (quest.academyYear ?? 1) &&
+    (!quest.prerequisiteQuestId ||
+      player.claimedQuests.includes(quest.prerequisiteQuestId))
   );
 }
 
@@ -66,7 +84,8 @@ function isExamReady(quest, player) {
       )
       .every(
         (objective) =>
-          getObjectiveProgress(objective, player) >= objective.required,
+          getObjectiveProgress(objective, player, quest.id) >=
+          objective.required,
       ) &&
     !player.completedMilestones.includes("first-exam")
   );
