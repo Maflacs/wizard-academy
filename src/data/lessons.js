@@ -7,9 +7,11 @@ const lessons = [
     energyCost: 20,
     xpReward: 35,
     spellUnlocks: [
-      { spellId: "wind-blade", academicYear: 1, requiredAttendances: 3 },
-      { spellId: "force-pulse", academicYear: 1, requiredAttendances: 6 },
-      { spellId: "rune-lance", academicYear: 2, requiredAttendances: 3 },
+      { spellId: "wind-blade", requiredProgress: 3, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "force-pulse", requiredProgress: 6, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "rune-lance", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
+      { spellId: "crystal-echo", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
+      { spellId: "rune-fracture", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
     ],
   },
   {
@@ -20,9 +22,11 @@ const lessons = [
     energyCost: 15,
     xpReward: 25,
     spellUnlocks: [
-      { spellId: "biting-vine", academicYear: 1, requiredAttendances: 3 },
-      { spellId: "thorn-root", academicYear: 1, requiredAttendances: 6 },
-      { spellId: "draining-vine", academicYear: 2, requiredAttendances: 3 },
+      { spellId: "biting-vine", requiredProgress: 3, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "thorn-root", requiredProgress: 6, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "draining-vine", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
+      { spellId: "vital-bloom", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
+      { spellId: "venom-vine", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
     ],
   },
   {
@@ -33,13 +37,11 @@ const lessons = [
     energyCost: 30,
     xpReward: 50,
     spellUnlocks: [
-      { spellId: "guardian-shield", academicYear: 1, requiredAttendances: 3 },
-      { spellId: "healing-light", academicYear: 1, requiredAttendances: 6 },
-      {
-        spellId: "reinforced-ward",
-        academicYear: 2,
-        requiredAttendances: 3,
-      },
+      { spellId: "guardian-shield", requiredProgress: 3, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "healing-light", requiredProgress: 6, requiredLevel: 1, requiredAcademyYear: 1 },
+      { spellId: "reinforced-ward", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
+      { spellId: "unyielding-circle", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
+      { spellId: "dampening-circle", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
     ],
   },
 ];

@@ -1,28 +1,147 @@
 import { useEffect, useState } from "react";
 import "./SpellsPage.css";
 import { getEffectiveMaxMana } from "../utils/playerStats";
-import { formatAcademyYear } from "../utils/academy";
+import { formatAcademyYear, getAcademyYear } from "../utils/academy";
+import { getCurriculumProgress, isSpellCurrentlyEligible } from "../utils/curriculum";
+import {
+  getSpellQuickStats,
+  getSpellRole,
+  spellRoleLabels,
+} from "../utils/spellPresentation";
 
-const spellTypeLabels = {
-  attack: "Támadó",
-  shield: "Pajzs",
-  heal: "Gyógyító",
-  utility: "Segédmágia",
-};
+const roleFilters = [
+  { id: "all", label: "Összes" },
+  ...Object.entries(spellRoleLabels).map(([id, label]) => ({ id, label })),
+];
 
-function SpellsPage({
-  knownSpells,
-  preparedSpells,
-  spells,
-  items,
-  player,
-  onUpdatePreparedSpells,
-}) {
+function QuickStats({ spell }) {
+  return (
+    <div className="spell-quick-stats">
+      {getSpellQuickStats(spell).map((stat) => (
+        <span key={stat.id}>{stat.label}</span>
+      ))}
+    </div>
+  );
+}
+
+function PreparedSpellSummary({ spell }) {
+  return (
+    <>
+      <span className="prepared-spell-role">
+        {spellRoleLabels[getSpellRole(spell)]}
+      </span>
+      <strong>{spell.name}</strong>
+      <span className="prepared-spell-summary">
+        {getSpellQuickStats(spell).map((stat) => stat.label).join(" · ")}
+      </span>
+    </>
+  );
+}
+
+function SpellDetails({ spell }) {
+  return (
+    <div className="spell-expanded-details">
+      <dl className="spell-details">
+        <div><dt>Manaigény</dt><dd>{spell.manaCost}</dd></div>
+        {spell.basePower !== undefined && <div><dt>Alapsebzés</dt><dd>{spell.basePower}</dd></div>}
+        {spell.shieldAmount !== undefined && <div><dt>Pajzs ereje</dt><dd>{spell.shieldAmount}</dd></div>}
+        {spell.healAmount !== undefined && <div><dt>Gyógyítás</dt><dd>{spell.healAmount}</dd></div>}
+        {spell.critChanceBonus !== undefined && <div><dt>Kritikus bónusz</dt><dd>+{spell.critChanceBonus}%</dd></div>}
+        {spell.effect?.trigger === "playerDamagingAttack" && <div><dt>{spell.effect.name}</dt><dd>+{spell.effect.magnitude}% · {spell.effect.charges} támadás</dd></div>}
+        {spell.effect?.damage !== undefined && <div><dt>{spell.effect.name}</dt><dd>{spell.effect.damage} sebzés · {spell.effect.charges} alkalom</dd></div>}
+        {spell.effect?.trigger === "enemyDamagingAttack" && <div><dt>{spell.effect.name}</dt><dd>-{spell.effect.magnitude}% · {spell.effect.charges} támadás</dd></div>}
+        <div><dt>Szükséges szint</dt><dd>{spell.requiredLevel}</dd></div>
+      </dl>
+      {spell.type === "shield" && (
+        <div className="spell-mechanics">
+          <p><strong>Időtartam:</strong> amíg a pajzs el nem fogy.</p>
+          <p><strong>Sebzésfelfogás:</strong> a Védelem után fennmaradó sebzést fogja fel.</p>
+          <p><strong>Halmozódás:</strong> nem.</p>
+          <p><strong>Újravarázslás:</strong> legfeljebb a varázslat teljes pajzserősségéig állítja helyre.</p>
+        </div>
+      )}
+      {spell.effect?.trigger === "playerDamagingAttack" && (
+        <p className="spell-mechanics">
+          A találat után az ellenfél a következő {spell.effect.charges} sebző
+          támadásból {spell.effect.magnitude}%-kal több sebzést kap.
+        </p>
+      )}
+      {spell.effect?.damage !== undefined && (
+        <p className="spell-mechanics">
+          A következő {spell.effect.charges} sebző ellenséges akció előtt{" "}
+          {spell.effect.damage} sebzést okoz; ezt az ellenséges pajzs felfoghatja.
+        </p>
+      )}
+      {spell.effect?.trigger === "enemyDamagingAttack" && (
+        <p className="spell-mechanics">
+          A Védelem után {spell.effect.magnitude}%-kal csökkenti a következő{" "}
+          {spell.effect.charges} ellenséges támadás sebzését, még a pajzs előtt.
+        </p>
+      )}
+      {spell.type === "attack" && spell.healAmount !== undefined && (
+        <p className="spell-mechanics">A találat a feltüntetett értékkel gyógyít, de nem emeli az életerőt a maximum fölé.</p>
+      )}
+    </div>
+  );
+}
+
+function FilterTabs({ label, options, value, onChange }) {
+  return (
+    <div className="spell-filter-group">
+      <p className="eyebrow">{label}</p>
+      <div className="spell-filter-tabs">
+        {options.map((option) => (
+          <button
+            className={`text-button spell-filter ${value === option.id ? "active" : ""}`}
+            type="button"
+            key={option.id}
+            onClick={() => onChange(option.id)}
+            aria-pressed={value === option.id}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SpellsPage({ knownSpells, preparedSpells, spells, lessons, items, player, onUpdatePreparedSpells }) {
   const [message, setMessage] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [expandedSpells, setExpandedSpells] = useState(new Set());
+  const [replacementSpellId, setReplacementSpellId] = useState(null);
   const maxMana = getEffectiveMaxMana(player, items);
-  const learnedSpells = knownSpells
-    .map((spellId) => spells.find((spell) => spell.id === spellId))
-    .filter((spell) => spell);
+  const academyYear = getAcademyYear(player);
+  const curriculumUnlocks = lessons.flatMap((lesson) =>
+    (lesson.spellUnlocks || []).map((unlock) => ({ ...unlock, lessonId: lesson.id })),
+  );
+  const curriculumSpellIds = new Set(curriculumUnlocks.map((unlock) => unlock.spellId));
+  const availableSpells = spells
+    .map((spell, originalIndex) => ({ spell, originalIndex }))
+    .filter(({ spell }) => knownSpells.includes(spell.id) || curriculumSpellIds.has(spell.id))
+    .sort((first, second) => {
+      const firstUnlock = curriculumUnlocks.find((unlock) => unlock.spellId === first.spell.id);
+      const secondUnlock = curriculumUnlocks.find((unlock) => unlock.spellId === second.spell.id);
+      return (
+        (first.spell.requiredAcademyYear ?? 1) - (second.spell.requiredAcademyYear ?? 1) ||
+        (firstUnlock?.requiredProgress ?? Number.MAX_SAFE_INTEGER) - (secondUnlock?.requiredProgress ?? Number.MAX_SAFE_INTEGER) ||
+        first.originalIndex - second.originalIndex
+      );
+    })
+    .map(({ spell }) => spell);
+  const yearOptions = [
+    { id: "all", label: "Összes" },
+    ...[...new Set(availableSpells.map((spell) => spell.requiredAcademyYear ?? 1))]
+      .sort((a, b) => a - b)
+      .map((year) => ({ id: String(year), label: formatAcademyYear(year) })),
+  ];
+  const filteredSpells = availableSpells.filter(
+    (spell) =>
+      (roleFilter === "all" || getSpellRole(spell) === roleFilter) &&
+      (yearFilter === "all" || (spell.requiredAcademyYear ?? 1) === Number(yearFilter)),
+  );
 
   useEffect(() => {
     if (!message) return undefined;
@@ -36,6 +155,40 @@ function SpellsPage({
     }
   }
 
+  function requestPrepareSpell(spellId) {
+    if (
+      preparedSpells.length >= 3 &&
+      !preparedSpells.includes(spellId)
+    ) {
+      setReplacementSpellId(spellId);
+      setMessage("");
+      return;
+    }
+    updatePreparedSpell(spellId, true);
+  }
+
+  function replacePreparedSpell(preparedSpellId) {
+    if (!replacementSpellId) return;
+    if (
+      onUpdatePreparedSpells(
+        replacementSpellId,
+        true,
+        preparedSpellId,
+      )
+    ) {
+      setReplacementSpellId(null);
+    }
+  }
+
+  function toggleDetails(spellId) {
+    setExpandedSpells((current) => {
+      const next = new Set(current);
+      if (next.has(spellId)) next.delete(spellId);
+      else next.add(spellId);
+      return next;
+    });
+  }
+
   return (
     <section className="page spells-page">
       <p className="eyebrow">Az akadémia varázsarchívuma</p>
@@ -45,126 +198,108 @@ function SpellsPage({
       <div className="parchment-panel prepared-spells-panel">
         <p className="eyebrow">Bekészített varázsigék</p>
         <p>Legfeljebb 3 varázsigét használhatsz a párbajokban.</p>
+        {replacementSpellId && (
+          <div className="replacement-message" role="status">
+            <p>
+              Válaszd ki, melyik bekészített varázslat helyére kerüljön az új
+              varázslat.
+            </p>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setReplacementSpellId(null)}
+            >
+              Mégse
+            </button>
+          </div>
+        )}
         <div className="prepared-spell-slots">
           {preparedSpells.map((spellId) => {
             const spell = spells.find((candidate) => candidate.id === spellId);
-            return spell ? (
-              <span className="prepared-spell-slot" key={spell.id}>
-                {spell.name}
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={() => updatePreparedSpell(spell.id, false)}
-                >
-                  Kiveszem
-                </button>
-              </span>
-            ) : null;
+            if (!spell) return null;
+            return replacementSpellId ? (
+              <button
+                className="prepared-spell-slot replacement-target"
+                type="button"
+                key={spell.id}
+                onClick={() => replacePreparedSpell(spell.id)}
+                aria-label={`${spell.name} lecserélése`}
+              >
+                <PreparedSpellSummary spell={spell} />
+                <span className="replacement-target-label">Ezt cserélem le</span>
+              </button>
+            ) : (
+              <article className="prepared-spell-slot" key={spell.id}>
+                <PreparedSpellSummary spell={spell} />
+                <button className="text-button" type="button" onClick={() => updatePreparedSpell(spell.id, false)}>Kiveszem</button>
+              </article>
+            );
           })}
         </div>
       </div>
-      {learnedSpells.length === 0 ? (
-        <p className="spellbook-empty">
-          Még egyetlen varázslatot sem sajátítottál el.
-        </p>
+      <div className="parchment-panel spell-filters">
+        <FilterTabs label="Típus" options={roleFilters} value={roleFilter} onChange={setRoleFilter} />
+        <FilterTabs label="Évfolyam" options={yearOptions} value={yearFilter} onChange={setYearFilter} />
+      </div>
+      {filteredSpells.length === 0 ? (
+        <p className="spellbook-empty">Nincs ilyen varázslat a kiválasztott évfolyamon.</p>
       ) : (
         <div className="spell-list">
-          {learnedSpells.map((spell) => (
-            <article className="parchment-panel spell-card" key={spell.id}>
-              <p className="eyebrow">{spellTypeLabels[spell.type]}</p>
-              <h3>{spell.name}</h3>
-              <p>{spell.description}</p>
-              <dl className="spell-details">
-                <div>
-                  <dt>Típus</dt>
-                  <dd>{spellTypeLabels[spell.type]}</dd>
+          {filteredSpells.map((spell) => {
+            const unlock = curriculumUnlocks.find((candidate) => candidate.spellId === spell.id);
+            const curriculumProgress = unlock ? getCurriculumProgress(player, unlock.lessonId) : null;
+            const isKnown = knownSpells.includes(spell.id);
+            const eligible = isSpellCurrentlyEligible(player, spell, academyYear);
+            const prepared = preparedSpells.includes(spell.id);
+            const canPrepare = isKnown && eligible;
+            const expanded = expandedSpells.has(spell.id);
+            const missingProgress = unlock && curriculumProgress < unlock.requiredProgress;
+            const missingLevel = player.level < (spell.requiredLevel ?? 1);
+            const missingYear = academyYear < (spell.requiredAcademyYear ?? 1);
+            return (
+              <article className={`parchment-panel spell-card ${isKnown ? "spell-known" : "spell-locked"} ${replacementSpellId === spell.id ? "replacement-source" : ""}`} key={spell.id}>
+                <div className="spell-card-heading">
+                  <div><p className="eyebrow">{spellRoleLabels[getSpellRole(spell)]}</p><h3>{spell.name}</h3></div>
+                  <div className="spell-state"><strong>{isKnown ? "Megtanulva" : "Zárolva"}</strong>{prepared && <span>Bekészítve</span>}</div>
                 </div>
-                {spell.requiredAcademyYear > 1 && (
-                  <div>
-                    <dt>Évfolyam</dt>
-                    <dd>{formatAcademyYear(spell.requiredAcademyYear)}</dd>
+                <p className="spell-description">{spell.description}</p>
+                <QuickStats spell={spell} />
+                <p className="spell-year">{formatAcademyYear(spell.requiredAcademyYear ?? 1)} évfolyam</p>
+                {replacementSpellId === spell.id && (
+                  <p className="replacement-source-label">
+                    Ezt a varázslatot szeretnéd bekészíteni
+                  </p>
+                )}
+                {!isKnown && (missingProgress || missingLevel || missingYear) && (
+                  <div className="spell-requirements">
+                    {missingProgress && <p>Tanulmányi haladás: {curriculumProgress} / {unlock.requiredProgress}</p>}
+                    {missingLevel && <p>Szükséges szint: {spell.requiredLevel} — jelenlegi: {player.level}</p>}
+                    {missingYear && <p>Szükséges évfolyam: {formatAcademyYear(spell.requiredAcademyYear)} — jelenlegi: {formatAcademyYear(academyYear)}</p>}
                   </div>
                 )}
-                <div>
-                  <dt>Manaigény</dt>
-                  <dd>{spell.manaCost}</dd>
-                </div>
-                {spell.basePower !== undefined && (
-                  <div>
-                    <dt>Alapsebzés</dt>
-                    <dd>{spell.basePower}</dd>
+                {isKnown && !eligible && (
+                  <div className="spell-requirements">
+                    {missingLevel && <p>Szükséges szint: {spell.requiredLevel} — jelenlegi: {player.level}</p>}
+                    {missingYear && <p>Szükséges évfolyam: {formatAcademyYear(spell.requiredAcademyYear)} — jelenlegi: {formatAcademyYear(academyYear)}</p>}
                   </div>
                 )}
-                {spell.shieldAmount !== undefined && (
-                  <div>
-                    <dt>Pajzs ereje</dt>
-                    <dd>{spell.shieldAmount}</dd>
-                  </div>
-                )}
-                {spell.healAmount !== undefined && (
-                  <div>
-                    <dt>Gyógyítás</dt>
-                    <dd>{spell.healAmount}</dd>
-                  </div>
-                )}
-                <div>
-                  <dt>Szükséges szint</dt>
-                  <dd>{spell.requiredLevel}</dd>
+                <button className="text-button spell-details-toggle" type="button" onClick={() => toggleDetails(spell.id)} aria-expanded={expanded}>Részletek {expanded ? "▴" : "▾"}</button>
+                {expanded && <SpellDetails spell={spell} />}
+                <div className="spell-card-action">
+                  {!canPrepare ? (
+                    <button className="button" type="button" disabled>Zárolva</button>
+                  ) : prepared ? (
+                    <button className="text-button" type="button" onClick={() => updatePreparedSpell(spell.id, false)}>Kiveszem</button>
+                  ) : (
+                    <button className="button" type="button" onClick={() => requestPrepareSpell(spell.id)}>Bekészítem</button>
+                  )}
                 </div>
-              </dl>
-              {spell.type === "shield" && (
-                <div className="shield-mechanics">
-                  <p>
-                    <strong>Időtartam:</strong> amíg a pajzs el nem fogy.
-                  </p>
-                  <p>
-                    <strong>Sebzésfelfogás:</strong> a Védelem után fennmaradó
-                    sebzést fogja fel.
-                  </p>
-                  <p>
-                    <strong>Halmozódás:</strong> nem.
-                  </p>
-                  <p>
-                    <strong>Újravarázslás:</strong> a sérült pajzsot legfeljebb
-                    a varázslat teljes pajzserősségéig tölti vissza.
-                  </p>
-                </div>
-              )}
-              {spell.type === "attack" && spell.healAmount !== undefined && (
-                <div className="spell-mechanics">
-                  <p>
-                    A varázslat támadáskor a feltüntetett értékkel gyógyít, de
-                    az életerőt nem emelheti a maximum fölé.
-                  </p>
-                </div>
-              )}
-              {preparedSpells.includes(spell.id) ? (
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={() => updatePreparedSpell(spell.id, false)}
-                >
-                  Kiveszem
-                </button>
-              ) : (
-                <button
-                  className="button"
-                  type="button"
-                  onClick={() => updatePreparedSpell(spell.id, true)}
-                  disabled={preparedSpells.length >= 3}
-                >
-                  Bekészítem
-                </button>
-              )}
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
-      {message && (
-        <p className="spellbook-message" role="status" aria-live="polite">
-          {message}
-        </p>
-      )}
+      {message && <p className="spellbook-message" role="status" aria-live="polite">{message}</p>}
     </section>
   );
 }

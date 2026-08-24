@@ -28,6 +28,16 @@
   margin: 8px 0 0;
   color: var(--muted);
 }
+.active-effects {
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+.active-effects .eyebrow,
+.combatant .active-effects p:not(.eyebrow) {
+  margin-top: 4px;
+  font-size: 12px;
+}
 .versus {
   color: var(--red);
   font:

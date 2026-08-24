@@ -22,14 +22,23 @@ import {
   changeRestingState,
   updateHealth,
 } from "./utils/health";
-import { getQuestProgress, isExamReady, isQuestUnlocked } from "./utils/quests";
-import { getAcademyYear } from "./utils/academy";
+import {
+  getQuestActivityValue,
+  getQuestBaselineKey,
+  getQuestExamId,
+  getQuestProgress,
+  isExamReady,
+  isQuestUnlocked,
+} from "./utils/quests";
+import { formatAcademyYear, getAcademyYear } from "./utils/academy";
 import getStatUpgradeCost from "./utils/statUpgrades";
 import {
-  getLessonAttendance,
-  incrementLessonAttendance,
-  migrateLessonProgress,
-} from "./utils/lessonProgress";
+  advanceCurriculumProgress,
+  curriculumProgressVersion,
+  isSpellCurrentlyEligible,
+  migrateCurriculumProgress,
+  reconcileCurriculumSpells,
+} from "./utils/curriculum";
 import { getItemSellPrice, isItemSellable } from "./utils/items";
 
 const initialPlayer = {
@@ -56,11 +65,14 @@ const initialPlayer = {
     amulet: null,
   },
   lastEnergyUpdate: Date.now(),
-  lessonProgress: {},
+  curriculumProgress: {},
+  curriculumProgressVersion,
   progress: {
     duelWins: 0,
     itemsPurchased: 0,
     statUpgrades: 0,
+    lessonAttendances: 0,
+    lessonAttendancesByCurriculumYear: {},
   },
   claimedQuests: [],
   completedMilestones: [],
@@ -76,16 +88,16 @@ function captureUnlockedQuestBaselines(player) {
 
   quests.forEach((quest) => {
     if (!isQuestUnlocked(quest, player)) return;
-    const baselineObjectives = quest.objectives.filter(
-      (objective) => objective.type === "progressSinceQuestActivation",
+    const baselineObjectives = quest.objectives.filter((objective) =>
+      Boolean(getQuestBaselineKey(objective)),
     );
     if (baselineObjectives.length === 0) return;
 
     const existingBaseline = questBaselines[quest.id] || {};
     const missingObjectives = baselineObjectives.filter(
       (objective) =>
-        !Number.isFinite(existingBaseline[objective.progressKey]) ||
-        existingBaseline[objective.progressKey] < 0,
+        !Number.isFinite(existingBaseline[getQuestBaselineKey(objective)]) ||
+        existingBaseline[getQuestBaselineKey(objective)] < 0,
     );
     if (missingObjectives.length === 0) return;
 
@@ -93,8 +105,8 @@ function captureUnlockedQuestBaselines(player) {
       ...existingBaseline,
       ...Object.fromEntries(
         missingObjectives.map((objective) => [
-          objective.progressKey,
-          player.progress[objective.progressKey] || 0,
+          getQuestBaselineKey(objective),
+          getQuestActivityValue(objective, player),
         ]),
       ),
     };
@@ -102,6 +114,15 @@ function captureUnlockedQuestBaselines(player) {
   });
 
   return changed ? { ...player, questBaselines } : player;
+}
+
+function reconcilePlayerCurriculum(player) {
+  return reconcileCurriculumSpells(
+    player,
+    lessons,
+    spells,
+    getAcademyYear(player),
+  );
 }
 
 function loadPlayer() {
@@ -114,6 +135,7 @@ function loadPlayer() {
       mana: _mana,
       maxMana: _maxMana,
       lastManaUpdate: _lastManaUpdate,
+      lessonProgress: _legacyLessonProgress,
       ...savedFields
     } = savedData;
     const knownSpells = (
@@ -128,7 +150,26 @@ function loadPlayer() {
     )
       .filter((spellId) => knownSpells.includes(spellId))
       .slice(0, 3);
-    const player = {
+    const claimedQuests = Array.isArray(savedData.claimedQuests)
+      ? savedData.claimedQuests
+      : initialPlayer.claimedQuests;
+    let completedMilestones = Array.isArray(savedData.completedMilestones)
+      ? savedData.completedMilestones
+      : initialPlayer.completedMilestones;
+    quests.forEach((quest) => {
+      if (
+        quest.yearCompletionMilestone &&
+        claimedQuests.includes(quest.id) &&
+        completedMilestones.includes(getQuestExamId(quest)) &&
+        !completedMilestones.includes(quest.yearCompletionMilestone)
+      ) {
+        completedMilestones = [
+          ...completedMilestones,
+          quest.yearCompletionMilestone,
+        ];
+      }
+    });
+    let player = {
       ...initialPlayer,
       ...savedFields,
       maxHealth: getMaxHealthForLevel(savedData.level || initialPlayer.level),
@@ -148,28 +189,36 @@ function loadPlayer() {
       isResting: savedData.isResting === true,
       knownSpells,
       preparedSpells,
-      lessonProgress: migrateLessonProgress(savedData.lessonProgress),
-      progress: { ...initialPlayer.progress, ...savedData.progress },
-      claimedQuests: Array.isArray(savedData.claimedQuests)
-        ? savedData.claimedQuests
-        : initialPlayer.claimedQuests,
-      completedMilestones: Array.isArray(savedData.completedMilestones)
-        ? savedData.completedMilestones
-        : initialPlayer.completedMilestones,
+      curriculumProgress: migrateCurriculumProgress(
+        savedData,
+        getAcademyYear({ completedMilestones }),
+      ),
+      curriculumProgressVersion,
+      progress: {
+        ...initialPlayer.progress,
+        ...savedData.progress,
+        lessonAttendancesByCurriculumYear: {
+          ...initialPlayer.progress.lessonAttendancesByCurriculumYear,
+          ...savedData.progress?.lessonAttendancesByCurriculumYear,
+        },
+      },
+      claimedQuests,
+      completedMilestones,
       questBaselines: savedData.questBaselines || initialPlayer.questBaselines,
     };
-    if (
-      player.claimedQuests.includes("first-exam") &&
-      player.completedMilestones.includes("first-exam") &&
-      !player.completedMilestones.includes("first-year-complete")
-    ) {
-      player.completedMilestones = [
-        ...player.completedMilestones,
-        "first-year-complete",
-      ];
-    }
+    player.preparedSpells = player.preparedSpells.filter((spellId) =>
+      isSpellCurrentlyEligible(
+        player,
+        spells.find((spell) => spell.id === spellId),
+        getAcademyYear(player),
+      ),
+    );
+    player = reconcilePlayerCurriculum(player).player;
     const updatedPlayer = updateHealth(
-      updateEnergy(captureUnlockedQuestBaselines(player), Date.now()),
+      updateEnergy(
+        captureUnlockedQuestBaselines(player),
+        Date.now(),
+      ),
       Date.now(),
     );
     localStorage.setItem("player-state", JSON.stringify(updatedPlayer));
@@ -387,20 +436,24 @@ function App() {
     notify(`${item.name} felszerelve.`, "success");
   }
 
-  function updatePreparedSpells(spellId, shouldPrepare) {
+  function updatePreparedSpells(spellId, shouldPrepare, replaceSpellId = null) {
     if (!player.knownSpells.includes(spellId)) return false;
     const spell = spells.find((candidate) => candidate.id === spellId);
     if (
       !spell ||
-      getAcademyYear(player) < (spell.requiredAcademyYear ?? 1)
+      !isSpellCurrentlyEligible(player, spell, getAcademyYear(player))
     )
       return false;
     const preparedSpells = shouldPrepare
       ? player.preparedSpells.includes(spellId)
         ? player.preparedSpells
-        : player.preparedSpells.length >= 3
-          ? null
-          : [...player.preparedSpells, spellId]
+        : replaceSpellId && player.preparedSpells.includes(replaceSpellId)
+          ? player.preparedSpells.map((preparedSpellId) =>
+              preparedSpellId === replaceSpellId ? spellId : preparedSpellId,
+            )
+          : player.preparedSpells.length >= 3
+            ? null
+            : [...player.preparedSpells, spellId]
       : player.preparedSpells.filter(
           (preparedSpellId) => preparedSpellId !== spellId,
         );
@@ -453,50 +506,80 @@ function App() {
       return;
     }
 
-    const progression = processExperience(player, lesson.xpReward);
+    // Capture a newly active activity objective before this attendance changes it.
+    const playerWithBaselines = captureUnlockedQuestBaselines(player);
+    const progression = processExperience(playerWithBaselines, lesson.xpReward);
     const { leveledUp, newLevel: _newLevel, ...progressionState } = progression;
-    const academyYear = getAcademyYear(player);
-    const lessonProgress = incrementLessonAttendance(
-      player,
+    const academyYear = getAcademyYear(playerWithBaselines);
+    const curriculum = advanceCurriculumProgress(
+      playerWithBaselines,
       lesson.id,
       academyYear,
     );
-    const attendanceCount =
-      getLessonAttendance(player, lesson.id, academyYear) + 1;
-    const learnedSpellIds = (lesson.spellUnlocks || [])
-      .filter(
-        (unlock) =>
-          (unlock.academicYear ?? 1) === academyYear &&
-          unlock.requiredAttendances === attendanceCount &&
-          !player.knownSpells.includes(unlock.spellId),
-      )
-      .map((unlock) => unlock.spellId);
-    const nextPlayer = {
-      ...player,
+    const progressedPlayer = {
+      ...playerWithBaselines,
       ...progressionState,
-      energy: leveledUp ? player.maxEnergy : player.energy - lesson.energyCost,
+      energy: leveledUp
+        ? playerWithBaselines.maxEnergy
+        : playerWithBaselines.energy - lesson.energyCost,
       lastEnergyUpdate:
-        leveledUp || player.energy >= player.maxEnergy
+        leveledUp ||
+        playerWithBaselines.energy >= playerWithBaselines.maxEnergy
           ? Date.now()
-          : player.lastEnergyUpdate,
-      lessonProgress,
-      knownSpells: [...player.knownSpells, ...learnedSpellIds],
+          : playerWithBaselines.lastEnergyUpdate,
+      curriculumProgress: curriculum.curriculumProgress,
+      curriculumProgressVersion,
+      progress: {
+        ...playerWithBaselines.progress,
+        lessonAttendances:
+          (playerWithBaselines.progress.lessonAttendances || 0) + 1,
+        lessonAttendancesByCurriculumYear: {
+          ...playerWithBaselines.progress.lessonAttendancesByCurriculumYear,
+          [curriculum.curriculumYear]:
+            (playerWithBaselines.progress
+              .lessonAttendancesByCurriculumYear?.[
+              curriculum.curriculumYear
+            ] || 0) + 1,
+        },
+      },
     };
+    const { player: nextPlayer, learnedSpellIds } =
+      reconcilePlayerCurriculum(progressedPlayer);
     persistPlayer(nextPlayer);
     const learnedSpells = learnedSpellIds
       .map((spellId) => spells.find((spell) => spell.id === spellId))
       .filter((spell) => spell);
     const learnedMessage =
       learnedSpells.length > 0
-        ? ` Új varázsigét tanultál: ${learnedSpells.map((spell) => spell.name).join(", ")}!`
+        ? ` Új varázslatot sajátítottál el: ${learnedSpells.map((spell) => spell.name).join(", ")}!`
         : "";
+    const levelLockedUnlock = (lesson.spellUnlocks || []).find((unlock) => {
+      const spell = spells.find((candidate) => candidate.id === unlock.spellId);
+      return (
+        curriculum.progress >= unlock.requiredProgress &&
+        !nextPlayer.knownSpells.includes(unlock.spellId) &&
+        nextPlayer.level < (unlock.requiredLevel ?? spell?.requiredLevel ?? 1)
+      );
+    });
+    const lockedSpell = levelLockedUnlock
+      ? spells.find((spell) => spell.id === levelLockedUnlock.spellId)
+      : null;
+    const progressMessage = curriculum.advanced
+      ? ` ${lesson.name} tanulmányi haladás: ${curriculum.progress} / ${curriculum.cap}.`
+      : " Az évfolyam tananyagát már teljesítetted. A gyakorlásért továbbra is tapasztalatot szereztél.";
+    const levelLockMessage = levelLockedUnlock
+      ? ` Elérted a ${lockedSpell?.name} tanulmányi követelményét, de még nem vagy elég tapasztalt az elsajátításához. Szükséges szint: ${levelLockedUnlock.requiredLevel}.`
+      : "";
     if (!progression.leveledUp) {
       notify(
-        `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP.${learnedMessage}`,
+        `${lesson.name}: sikeresen teljesítetted az órát. +${lesson.xpReward} XP.${progressMessage}${learnedMessage}${levelLockMessage}`,
         "success",
       );
     } else {
-      notifyLevelUp(progression, learnedMessage);
+      notifyLevelUp(
+        progression,
+        `${progressMessage}${learnedMessage}${levelLockMessage}`,
+      );
     }
   }
 
@@ -510,7 +593,7 @@ function App() {
     const { leveledUp, newLevel: _newLevel, ...progressionState } = progression;
 
     // Rewards are persisted centrally so the duel page only controls temporary combat state.
-    persistPlayer({
+    const reconciled = reconcilePlayerCurriculum({
       ...playerWithBaselines,
       ...progressionState,
       gold: playerWithBaselines.gold + enemy.goldReward,
@@ -520,7 +603,14 @@ function App() {
         duelWins: playerWithBaselines.progress.duelWins + 1,
       },
     });
-    notifyLevelUp(progression);
+    persistPlayer(reconciled.player);
+    const learnedMessage = reconciled.learnedSpellIds.length
+      ? ` Új varázslatot sajátítottál el: ${reconciled.learnedSpellIds
+          .map((spellId) => spells.find((spell) => spell.id === spellId)?.name)
+          .filter(Boolean)
+          .join(", ")}.`
+      : "";
+    notifyLevelUp(progression, learnedMessage);
     return {
       leveledUp,
       newLevel: progression.newLevel,
@@ -545,36 +635,44 @@ function App() {
     } = progression;
 
     // The claimed ID is persisted with the reward so it can only be paid once.
-    const completesFirstYear = quest.id === "first-exam";
+    const completesAcademyYear = Boolean(quest.yearCompletionMilestone);
     const completedMilestones =
-      completesFirstYear &&
-      !player.completedMilestones.includes("first-year-complete")
-        ? [...player.completedMilestones, "first-year-complete"]
+      completesAcademyYear &&
+      !player.completedMilestones.includes(quest.yearCompletionMilestone)
+        ? [...player.completedMilestones, quest.yearCompletionMilestone]
         : player.completedMilestones;
-    const nextPlayer = captureUnlockedQuestBaselines({
+    const reconciled = reconcilePlayerCurriculum({
       ...player,
       ...progressionState,
       gold: player.gold + quest.rewards.gold,
       claimedQuests: [...player.claimedQuests, quest.id],
       completedMilestones,
     });
+    const nextPlayer = captureUnlockedQuestBaselines(reconciled.player);
     persistPlayer(nextPlayer);
-    notifyLevelUp(progression);
-    if (completesFirstYear) {
+    const learnedMessage = reconciled.learnedSpellIds.length
+      ? ` Új varázslatot sajátítottál el: ${reconciled.learnedSpellIds
+          .map((spellId) => spells.find((spell) => spell.id === spellId)?.name)
+          .filter(Boolean)
+          .join(", ")}.`
+      : "";
+    notifyLevelUp(progression, learnedMessage);
+    if (completesAcademyYear) {
+      const completedYear = quest.academyYear ?? 1;
       notify(
-        "Teljesítetted az I. évfolyamot! Megnyílt előtted a II. évfolyam.",
+        `Teljesítetted a ${formatAcademyYear(completedYear)} évfolyamot! Megnyílt előtted a ${formatAcademyYear(completedYear + 1)} évfolyam.${learnedMessage}`,
         "yearUp",
       );
     }
   }
 
-  function completeExam(remainingHealth) {
+  function completeExam(examId, remainingHealth) {
     const examQuest = quests.find((quest) =>
-      quest.objectives.some((objective) => objective.type === "examVictory"),
+      getQuestExamId(quest) === examId,
     );
     if (
       !examQuest ||
-      player.completedMilestones.includes(examQuest.milestoneId) ||
+      player.completedMilestones.includes(examId) ||
       !isExamReady(examQuest, player)
     ) {
       return false;
@@ -587,7 +685,7 @@ function App() {
       lastHealthUpdate: Date.now(),
       completedMilestones: [
         ...player.completedMilestones,
-        examQuest.milestoneId,
+        examId,
       ],
     });
     return true;
@@ -640,7 +738,10 @@ function App() {
   const healthStatus = {
     countdown: getHealthCountdown(player, currentTime),
   };
-  const examQuest = quests.find((quest) => quest.id === "first-exam");
+  function isExamAvailable(examId) {
+    const examQuest = quests.find((quest) => getQuestExamId(quest) === examId);
+    return examQuest ? isExamReady(examQuest, player) : false;
+  }
   return (
     <HashRouter>
       <Layout notification={notification}>
@@ -681,6 +782,7 @@ function App() {
                 knownSpells={player.knownSpells}
                 preparedSpells={player.preparedSpells}
                 spells={spells}
+                lessons={lessons}
                 items={items}
                 player={player}
                 onUpdatePreparedSpells={updatePreparedSpells}
@@ -710,7 +812,7 @@ function App() {
                 onExamVictory={completeExam}
                 onDuelEnd={persistDuelHealth}
                 isResting={player.isResting}
-                examReady={examQuest ? isExamReady(examQuest, player) : false}
+                isExamAvailable={isExamAvailable}
               />
             }
           />

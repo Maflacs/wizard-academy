@@ -5,10 +5,19 @@ function createScaledEnemy(baseEnemy, playerLevel) {
   return {
     ...baseEnemy,
     level,
-    maxHealth: baseEnemy.baseHealth + (level - 1) * baseEnemy.healthPerLevel,
-    attack: baseEnemy.baseAttack + (level - 1) * baseEnemy.attackPerLevel,
-    xpReward: baseEnemy.baseXpReward + (level - 1) * 5,
-    goldReward: baseEnemy.baseGoldReward + (level - 1) * 2,
+    maxHealth: Math.round(
+      (baseEnemy.baseHealth + (level - 1) * baseEnemy.healthPerLevel) *
+        (baseEnemy.healthMultiplier || 1),
+    ),
+    attack:
+      (baseEnemy.baseAttack + (level - 1) * baseEnemy.attackPerLevel) *
+      (baseEnemy.attackMultiplier || 1),
+    xpReward: baseEnemy.isExamOpponent
+      ? 0
+      : baseEnemy.baseXpReward + (level - 1) * 5,
+    goldReward: baseEnemy.isExamOpponent
+      ? 0
+      : baseEnemy.baseGoldReward + (level - 1) * 2,
   };
 }
 

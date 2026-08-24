@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import getEffectiveStats, {
-  getEffectiveMaxMana,
-} from "../utils/playerStats";
+import getEffectiveStats, { getEffectiveMaxMana } from "../utils/playerStats";
 import applyDamageVariance, {
   applyShield,
+  applyTemporaryEffect,
   chooseEnemyAction,
+  consumeTemporaryEffect,
+  getTemporaryEffect,
   resolveShieldDamage,
 } from "../utils/combat";
 import createScaledEnemy from "../utils/enemyScaling";
-import {
-  getMaxHealthForLevel,
-} from "../utils/playerProgression";
+import { getMaxHealthForLevel } from "../utils/playerProgression";
 import { getAcademyYear } from "../utils/academy";
 import "./DuelPage.css";
 
@@ -37,6 +36,17 @@ function chooseWeightedAutoAction(actions, state, previousActionType) {
       weight = healthRatio > 0.75 ? 1 : healthRatio >= 0.4 ? 3 : 5;
     } else if (action.type === "heal") {
       weight = healthRatio >= 0.4 ? 4 : 6;
+    } else if (action.type === "buff") {
+      weight = healthRatio >= 0.75 ? 1 : healthRatio >= 0.4 ? 3 : 5;
+    }
+    if (
+      action.effect &&
+      !getTemporaryEffect(
+        state.activeEffects[action.effect.target],
+        action.effect.id,
+      )
+    ) {
+      weight += 2;
     }
     return { action, weight };
   });
@@ -87,6 +97,7 @@ function createDuelState(enemy, player, items) {
     combatShieldName: null,
     enemyShield: 0,
     enemyShieldCooldown: 0,
+    activeEffects: { player: [], enemy: [] },
   };
 }
 
@@ -97,7 +108,10 @@ function getAttackDamage(spell, effectiveStats) {
       : spell.basePower + effectiveStats.magicPower;
   const variedDamage = applyDamageVariance(baseDamage);
   if (spell.id === basicAttack.id) return variedDamage;
-  const criticalChance = Math.min(50, 5 + effectiveStats.focus);
+  const criticalChance = Math.min(
+    50,
+    5 + effectiveStats.focus + (spell.critChanceBonus || 0),
+  );
   const isCritical = Math.random() * 100 < criticalChance;
   return {
     damage: isCritical ? Math.round(variedDamage * 1.5) : variedDamage,
@@ -117,6 +131,32 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       state.combatMana < spell.manaCost
     )
       return;
+    if (automatic && spell.effect) {
+      const targetEffects = state.activeEffects[spell.effect.target];
+      const activeEffect = getTemporaryEffect(targetEffects, spell.effect.id);
+      const followUpAttacks = spells.filter(
+        (candidate) =>
+          candidate.id !== spell.id &&
+          candidate.type === "attack" &&
+          preparedSpellIds.includes(candidate.id),
+      );
+      if (activeEffect?.charges > 1) return;
+      if (
+        spell.effect.trigger === "playerDamagingAttack" &&
+        followUpAttacks.length > 0 &&
+        followUpAttacks.every(
+            (candidate) =>
+              state.combatMana - spell.manaCost < candidate.manaCost,
+          )
+      )
+        return;
+      if (
+        spell.effect.target === "player" &&
+        spell.effect.trigger === "enemyDamagingAttack" &&
+        state.combatHealth >= state.maxHealth * 0.75
+      )
+        return;
+    }
     if (
       spell.type === "shield" &&
       (automatic
@@ -127,13 +167,58 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
     if (
       spell.type === "heal" &&
       state.combatHealth <
-        (automatic ? state.maxHealth * 0.75 : state.maxHealth)
+        (automatic ? state.maxHealth * 0.75 : state.maxHealth) &&
+      (!automatic ||
+        state.maxHealth - state.combatHealth >= spell.healAmount * 0.5)
     )
       preparedActions.push(spell);
     if (spell.type === "attack") preparedActions.push(spell);
+    if (spell.type === "buff") preparedActions.push(spell);
   });
   // Wand Strike is implicit only when no prepared spell can currently be used.
   return preparedActions.length > 0 ? preparedActions : [basicAttack];
+}
+
+function applySpellEffect(state, effect, addLog) {
+  if (!effect) return;
+  state.activeEffects = {
+    ...state.activeEffects,
+    [effect.target]: applyTemporaryEffect(
+      state.activeEffects[effect.target],
+      effect,
+    ),
+  };
+  addLog(`${effect.name} hatás aktiválódott (${effect.charges} alkalom).`);
+}
+
+function damageEnemyThroughShield(state, damage, sourceName, addLog) {
+  if (state.enemyShield <= 0) {
+    state.enemyHealth = Math.max(0, state.enemyHealth - damage);
+    addLog(`${sourceName} ${damage} sebzést okozott.`);
+    return;
+  }
+  const shieldResult = resolveShieldDamage(state.enemyShield, damage);
+  const enemyHealthBeforeDamage = state.enemyHealth;
+  state.enemyShield = shieldResult.remainingShield;
+  state.enemyHealth = Math.max(
+    0,
+    state.enemyHealth - shieldResult.healthDamage,
+  );
+  const actualHealthDamage = enemyHealthBeforeDamage - state.enemyHealth;
+  addLog(
+    shieldResult.remainingShield > 0
+      ? `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott.`
+      : `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott és szertefoszlott.`,
+  );
+  if (actualHealthDamage > 0) {
+    addLog(`${sourceName} ${actualHealthDamage} sebzést okozott.`);
+  } else {
+    addLog(
+      shieldResult.remainingShield > 0
+        ? `A támadás nem jutott át a pajzson. Maradék pajzs: ${shieldResult.remainingShield}.`
+        : "A támadás nem jutott át a pajzson.",
+    );
+  }
 }
 
 function performEnemyAction(state, effectiveStats, addLog) {
@@ -148,6 +233,26 @@ function performEnemyAction(state, effectiveStats, addLog) {
     ...state.scaledEnemy,
     actions: availableActions,
   });
+  const isDamagingAction = ["attack", "heavyAttack"].includes(action.type);
+  if (isDamagingAction) {
+    const venom = state.activeEffects.enemy.find(
+      (effect) =>
+        effect.trigger === "enemyDamagingAction" && effect.damage !== undefined,
+    );
+    if (venom) {
+      state.activeEffects = {
+        ...state.activeEffects,
+        enemy: consumeTemporaryEffect(state.activeEffects.enemy, venom.id),
+      };
+      damageEnemyThroughShield(
+        state,
+        venom.damage,
+        venom.sourceName || venom.name,
+        addLog,
+      );
+      if (state.enemyHealth <= 0) return;
+    }
+  }
   if (action.type === "shield") {
     const hadShield = state.enemyShield > 0;
     state.enemyShield = applyShield(state.enemyShield, {
@@ -177,10 +282,26 @@ function performEnemyAction(state, effectiveStats, addLog) {
   const attack = heavy
     ? state.scaledEnemy.attack * 1.35
     : state.scaledEnemy.attack;
-  const incoming = Math.max(
+  let incoming = Math.max(
     1,
     applyDamageVariance(attack) - effectiveStats.defense,
   );
+  const fortified = state.activeEffects.player.find(
+    (effect) => effect.trigger === "enemyDamagingAttack" && effect.magnitude,
+  );
+  if (fortified) {
+    incoming = Math.max(
+      1,
+      Math.round(incoming * (1 - fortified.magnitude / 100)),
+    );
+    state.activeEffects = {
+      ...state.activeEffects,
+      player: consumeTemporaryEffect(
+        state.activeEffects.player,
+        fortified.id,
+      ),
+    };
+  }
   if (state.combatShield > 0) {
     const shieldName = state.combatShieldName || "Védőpajzsod";
     const result = resolveShieldDamage(state.combatShield, incoming);
@@ -215,36 +336,18 @@ function performEnemyAction(state, effectiveStats, addLog) {
 
 function performPlayerAttack(state, spell, effectiveStats, addLog) {
   const result = getAttackDamage(spell, effectiveStats);
-  const damage = typeof result === "number" ? result : result.damage;
-  if (state.enemyShield > 0) {
-    const shieldResult = resolveShieldDamage(state.enemyShield, damage);
-    const enemyHealthBeforeAttack = state.enemyHealth;
-    state.enemyShield = shieldResult.remainingShield;
-    state.enemyHealth = Math.max(
-      0,
-      state.enemyHealth - shieldResult.healthDamage,
-    );
-    const actualHealthDamage = enemyHealthBeforeAttack - state.enemyHealth;
-    addLog(
-      shieldResult.remainingShield > 0
-        ? `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott.`
-        : `${state.scaledEnemy.name} védőpajzsa ${shieldResult.absorbed} sebzést felfogott és szertefoszlott.`,
-    );
-    if (actualHealthDamage > 0) {
-      addLog(
-        `${spell.name} ${actualHealthDamage} sebzést okozott ${state.scaledEnemy.name} ellen.`,
-      );
-    } else {
-      addLog(
-        shieldResult.remainingShield > 0
-          ? `A támadás nem jutott át a pajzson. Maradék pajzs: ${shieldResult.remainingShield}.`
-          : "A támadás nem jutott át a pajzson.",
-      );
-    }
-  } else {
-    state.enemyHealth = Math.max(0, state.enemyHealth - damage);
-    addLog(`${spell.name} ${damage} sebzést okozott.`);
+  let damage = typeof result === "number" ? result : result.damage;
+  const exposed = state.activeEffects.enemy.find(
+    (effect) => effect.trigger === "playerDamagingAttack" && effect.magnitude,
+  );
+  if (exposed) {
+    damage = Math.max(1, Math.round(damage * (1 + exposed.magnitude / 100)));
+    state.activeEffects = {
+      ...state.activeEffects,
+      enemy: consumeTemporaryEffect(state.activeEffects.enemy, exposed.id),
+    };
   }
+  damageEnemyThroughShield(state, damage, spell.name, addLog);
 
   if (spell.healAmount !== undefined) {
     const healed = Math.min(
@@ -254,10 +357,17 @@ function performPlayerAttack(state, spell, effectiveStats, addLog) {
     state.combatHealth += healed;
     if (healed > 0) addLog(`${spell.name} ${healed} életerőt állított helyre.`);
   }
+  applySpellEffect(state, spell.effect, addLog);
 }
 
 function simulateDuel(player, spells, items, duelState) {
-  const state = { ...duelState };
+  const state = {
+    ...duelState,
+    activeEffects: {
+      player: [...duelState.activeEffects.player],
+      enemy: [...duelState.activeEffects.enemy],
+    },
+  };
   const effectiveStats = getEffectiveStats(player, items);
   const log = [];
   let previousActionType = null;
@@ -277,7 +387,7 @@ function simulateDuel(player, spells, items, duelState) {
       state.combatShieldName = action.name;
       addLog(
         hadShield
-          ? `Újra megerősítetted a ${action.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
+          ? `Újra felállítottad a ${action.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
           : `${action.name} varázslatot idéztél. Pajzsod ereje: ${state.combatShield}.`,
       );
     } else if (action.type === "heal") {
@@ -287,13 +397,31 @@ function simulateDuel(player, spells, items, duelState) {
       );
       state.combatHealth += healed;
       addLog(`${action.name} ${healed} életerőt állított helyre.`);
+    } else if (action.type === "buff") {
+      applySpellEffect(state, action.effect, addLog);
     }
     previousActionType = action.type || "attack";
     if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
     performEnemyAction(state, effectiveStats, addLog);
+    if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
     if (state.combatHealth <= 0) return { ...state, status: "defeat", log };
   }
   return { ...state, status: "draw", log };
+}
+
+function EffectList({ effects }) {
+  if (effects.length === 0) return null;
+  return (
+    <div className="active-effects">
+      <p className="eyebrow">Aktív hatások</p>
+      {effects.map((effect) => (
+        <p key={effect.id}>
+          {effect.name} — {effect.charges}{" "}
+          {effect.trigger === "enemyDamagingAction" ? "hatás" : "támadás"}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function DuelPage({
@@ -304,16 +432,17 @@ function DuelPage({
   onAwardRewards,
   onExamVictory,
   onDuelEnd,
-  examReady,
+  isExamAvailable,
   isResting,
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isExamMode =
-    new URLSearchParams(location.search).get("exam") === "first-exam";
-  const examOpponent = enemies.find((enemy) => enemy.isExamOpponent);
+  const examId = new URLSearchParams(location.search).get("exam");
+  const isExamMode = Boolean(examId);
+  const examOpponent = enemies.find((enemy) => enemy.examId === examId);
   const normalEnemies = enemies.filter((enemy) => !enemy.isExamOpponent);
-  const examCompleted = player.completedMilestones.includes("first-exam");
+  const examCompleted = player.completedMilestones.includes(examId);
+  const examReady = Boolean(examOpponent && isExamAvailable(examId));
   const blockMessage = getDuelBlockMessage({
     isExamMode,
     examCompleted,
@@ -324,7 +453,9 @@ function DuelPage({
   const canStartDuel = blockMessage === null;
   const [duel, setDuel] = useState(() =>
     createDuelState(
-      isExamMode ? examOpponent : chooseRandom(normalEnemies),
+      isExamMode
+        ? examOpponent || normalEnemies[0]
+        : chooseRandom(normalEnemies),
       player,
       items,
     ),
@@ -348,8 +479,9 @@ function DuelPage({
       (spell) =>
         spell &&
         player.knownSpells.includes(spell.id) &&
+        player.level >= spell.requiredLevel &&
         getAcademyYear(player) >= (spell.requiredAcademyYear ?? 1) &&
-        ["attack", "shield", "heal"].includes(spell.type),
+        ["attack", "shield", "heal", "buff"].includes(spell.type),
     );
   const usableActions = getUsablePlayerActions(player, availableSpells, duel);
   const showFallback =
@@ -367,7 +499,9 @@ function DuelPage({
       return;
     }
     const nextDuel = createDuelState(
-      isExamMode ? examOpponent : chooseRandom(normalEnemies),
+      isExamMode
+        ? examOpponent || normalEnemies[0]
+        : chooseRandom(normalEnemies),
       player,
       items,
     );
@@ -382,7 +516,7 @@ function DuelPage({
     setDuelStatus("victory");
     if (!rewardClaimed) {
       const rewards = isExamMode
-        ? { exam: onExamVictory(nextDuel.combatHealth) }
+        ? { exam: onExamVictory(examId, nextDuel.combatHealth) }
         : onAwardRewards(nextDuel.scaledEnemy, nextDuel.combatHealth);
       setVictorySummary(rewards);
       setRewardClaimed(true);
@@ -392,10 +526,18 @@ function DuelPage({
   function performManualEnemyTurn(nextDuel) {
     performEnemyAction(nextDuel, effectiveStats, addLog);
     setDuel(nextDuel);
+    if (nextDuel.enemyHealth <= 0) {
+      finishVictory(nextDuel);
+      return;
+    }
     if (nextDuel.combatHealth <= 0) {
       onDuelEnd(0);
       setDuelStatus("defeat");
-      addLog("Vereség! A gyakorlópárbajt elvesztetted.");
+      addLog(
+        isExamMode
+          ? "A vizsga ezúttal nem sikerült. Felépülés után újra megpróbálhatod."
+          : "Vereség! A gyakorlópárbajt elvesztetted.",
+      );
     }
   }
 
@@ -430,6 +572,8 @@ function DuelPage({
       );
       nextDuel.combatHealth += healed;
       addLog(`${spell.name} ${healed} életerőt állított helyre.`);
+    } else if (spell.type === "buff") {
+      applySpellEffect(nextDuel, spell.effect, addLog);
     }
     if (nextDuel.enemyHealth <= 0) {
       setDuel(nextDuel);
@@ -448,7 +592,7 @@ function DuelPage({
     if (result.status === "victory" && !rewardClaimed) {
       setVictorySummary(
         isExamMode
-          ? { exam: onExamVictory(result.combatHealth) }
+          ? { exam: onExamVictory(examId, result.combatHealth) }
           : onAwardRewards(result.scaledEnemy, result.combatHealth),
       );
       setRewardClaimed(true);
@@ -467,7 +611,9 @@ function DuelPage({
       <p className="eyebrow">
         {isExamMode ? "Az akadémia vizsgaterme" : "A gyakorlópárbaj csarnoka"}
       </p>
-      <h2>{isExamMode ? "Első vizsga" : "Párbajterem"}</h2>
+      <h2>
+        {isExamMode ? examOpponent?.examTitle || "Vizsga" : "Párbajterem"}
+      </h2>
       <div className="duel-status-bar">
         <span>
           Mana: {duel.combatMana} / {combatMaxMana}
@@ -487,6 +633,7 @@ function DuelPage({
           <p>
             Mana: {duel.combatMana} / {combatMaxMana}
           </p>
+          <EffectList effects={duel.activeEffects.player} />
         </article>
         <div className="versus" aria-hidden="true">
           VS
@@ -501,6 +648,7 @@ function DuelPage({
             Életerő: {duel.enemyHealth} / {duel.scaledEnemy.maxHealth}
           </p>
           {duel.enemyShield > 0 && <p>Védőpajzs: {duel.enemyShield}</p>}
+          <EffectList effects={duel.activeEffects.enemy} />
         </article>
       </div>
       {duelStatus === "active" && (
@@ -523,13 +671,33 @@ function DuelPage({
                     </p>
                   ) : spell.type === "shield" ? (
                     <p>Pajzs ereje: {spell.shieldAmount}</p>
-                  ) : (
+                  ) : spell.type === "heal" ? (
                     <p>Gyógyítás: {spell.healAmount}</p>
+                  ) : (
+                    <p>
+                      {spell.effect.name}: {spell.effect.magnitude}% ·{" "}
+                      {spell.effect.charges} támadás
+                    </p>
+                  )}
+                  {spell.effect?.trigger === "playerDamagingAttack" && (
+                    <p>
+                      Következő {spell.effect.charges} támadás: +
+                      {spell.effect.magnitude}% sebzés
+                    </p>
+                  )}
+                  {spell.effect?.damage !== undefined && (
+                    <p>
+                      Méreg: {spell.effect.damage} sebzés, {spell.effect.charges}{" "}
+                      alkalommal
+                    </p>
                   )}
                   {spell.type === "attack" &&
                     spell.healAmount !== undefined && (
                       <p>Gyógyítás: {spell.healAmount}</p>
                     )}
+                  {spell.critChanceBonus !== undefined && (
+                    <p>Kritikus bónusz: +{spell.critChanceBonus}%</p>
+                  )}
                   <p>Manaigény: {spell.manaCost}</p>
                   <button
                     className="button"

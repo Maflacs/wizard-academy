@@ -56,6 +56,8 @@ const enemies = [
     description:
       "A tanoncok tudását próbára tevő, mágikusan megidézett őrszellem.",
     isExamOpponent: true,
+    examId: "first-exam",
+    examTitle: "Első vizsga",
     archetype: "exam",
     combatStyle: "Vizsgáztató",
     difficulty: "Első vizsga",
@@ -68,6 +70,31 @@ const enemies = [
     actions: [
       { type: "attack", weight: 75 },
       { type: "shield", weight: 25, shieldAmount: 10 },
+    ],
+  },
+  {
+    id: "rune-circle-guardian",
+    name: "A Rúnakör Őre",
+    description:
+      "Az akadémia ősi rúnái által életre hívott vizsgáztató, aki támadással és védelemmel egyaránt próbára tesz.",
+    isExamOpponent: true,
+    examId: "second-exam",
+    examTitle: "Második vizsga",
+    archetype: "exam",
+    combatStyle: "Változatos vizsgáztató",
+    difficulty: "Második vizsga",
+    baseHealth: 65,
+    baseAttack: 12,
+    healthPerLevel: 12,
+    attackPerLevel: 2,
+    healthMultiplier: 1.15,
+    attackMultiplier: 1.08,
+    baseXpReward: 0,
+    baseGoldReward: 0,
+    actions: [
+      { type: "attack", weight: 60 },
+      { type: "heavyAttack", weight: 20 },
+      { type: "shield", weight: 20, shieldAmount: 10 },
     ],
   },
 ];

@@ -23,12 +23,60 @@
   font-size: 14px;
 }
 .lesson-progression {
-  margin-top: 10px;
+  margin-top: 14px;
   color: var(--red);
   font-size: 13px;
 }
 .lesson-progression p {
   margin: 3px 0 0 !important;
+}
+.curriculum-progress-label {
+  color: var(--ink) !important;
+  font-weight: 700;
+}
+.curriculum-progress-track {
+  width: min(300px, 100%);
+  height: 5px;
+  margin-top: 7px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--red) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 70%, var(--ink));
+}
+.curriculum-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+.curriculum-cap-message {
+  font-style: italic;
+}
+.next-curriculum {
+  margin-top: 13px;
+}
+.next-curriculum .eyebrow {
+  margin-bottom: 2px;
+}
+.next-spell {
+  color: var(--ink) !important;
+  font-size: 15px;
+}
+.curriculum-warning {
+  max-width: 470px;
+  color: var(--red) !important;
+  font-style: italic;
+}
+.learned-curriculum {
+  margin-top: 13px;
+}
+.learned-curriculum-toggle {
+  padding: 0;
+  font-size: 13px;
+}
+.learned-curriculum-list {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
 }
 @media (max-width: 700px) {
   .lesson {

@@ -6,8 +6,7 @@ const quests = [
     objectives: [
       {
         id: "attend-charms",
-        type: "lessonAttendance",
-        academicYear: 1,
+        type: "curriculumProgress",
         required: 1,
         description: "Vegyél részt egy órán",
       },
@@ -43,9 +42,8 @@ const quests = [
     objectives: [
       {
         id: "attend-charms-three-times",
-        type: "lessonAttendance",
+        type: "curriculumProgress",
         lessonId: "charms",
-        academicYear: 1,
         required: 3,
         description: "Vegyél részt három Bűbájtan órán",
       },
@@ -73,9 +71,8 @@ const quests = [
     objectives: [
       {
         id: "attend-defense-three-times",
-        type: "lessonAttendance",
+        type: "curriculumProgress",
         lessonId: "defensive-magic",
-        academicYear: 1,
         required: 3,
         description: "Vegyél részt három Mágikus védelem órán",
       },
@@ -104,6 +101,7 @@ const quests = [
   },
   {
     id: "first-exam",
+    academyYear: 1,
     prerequisiteQuestId: "defensive-basics",
     name: "Az első vizsga",
     description: "Elérkezett az idő, hogy bizonyítsd, mit tanultál.",
@@ -117,6 +115,7 @@ const quests = [
       {
         id: "win-first-exam",
         type: "examVictory",
+        examId: "first-exam",
         milestoneId: "first-exam",
         required: 1,
         description: "Győzd le az Akadémia Őrszellemét",
@@ -124,6 +123,7 @@ const quests = [
     ],
     rewards: { xp: 300, gold: 250 },
     milestoneId: "first-exam",
+    yearCompletionMilestone: "first-year-complete",
   },
   {
     id: "new-year-new-challenges",
@@ -134,8 +134,8 @@ const quests = [
     objectives: [
       {
         id: "attend-any-year-two-lesson",
-        type: "lessonAttendance",
-        academicYear: 2,
+        type: "lessonAttendanceSinceQuestActivation",
+        curriculumYear: 2,
         required: 1,
         description: "Vegyél részt egy II. évfolyamos órán",
       },
@@ -159,27 +159,24 @@ const quests = [
     objectives: [
       {
         id: "year-two-charms-three-times",
-        type: "lessonAttendance",
+        type: "curriculumProgress",
         lessonId: "charms",
-        academicYear: 2,
-        required: 3,
-        description: "Vegyél részt három II. évfolyamos Bűbájtan órán",
+        required: 9,
+        description: "Érd el a 9-es Bűbájtan tanulmányi haladást",
       },
       {
         id: "year-two-herbology-three-times",
-        type: "lessonAttendance",
+        type: "curriculumProgress",
         lessonId: "herbology",
-        academicYear: 2,
-        required: 3,
-        description: "Vegyél részt három II. évfolyamos Növénybűvészet órán",
+        required: 9,
+        description: "Érd el a 9-es Növénybűvészet tanulmányi haladást",
       },
       {
         id: "year-two-defense-three-times",
-        type: "lessonAttendance",
+        type: "curriculumProgress",
         lessonId: "defensive-magic",
-        academicYear: 2,
-        required: 3,
-        description: "Vegyél részt három II. évfolyamos Mágikus védelem órán",
+        required: 9,
+        description: "Érd el a 9-es Mágikus védelem tanulmányi haladást",
       },
       {
         id: "know-rune-lance",
@@ -229,6 +226,109 @@ const quests = [
       },
     ],
     rewards: { xp: 250, gold: 200 },
+  },
+  {
+    id: "chosen-path",
+    academyYear: 2,
+    prerequisiteQuestId: "deliberate-preparation",
+    name: "Választott út",
+    description:
+      "Mélyítsd el tudásodat abban a két mágikus ágban, amely leginkább illik hozzád.",
+    objectives: [
+      {
+        id: "deepen-two-subjects",
+        type: "curriculumMilestoneCount",
+        lessonIds: ["charms", "herbology", "defensive-magic"],
+        requiredProgress: 12,
+        required: 2,
+        description:
+          "Mélyítsd el legalább két tantárgy tananyagát a 12-es szintig",
+      },
+    ],
+    rewards: { xp: 300, gold: 225 },
+  },
+  {
+    id: "year-two-trial",
+    academyYear: 2,
+    prerequisiteQuestId: "chosen-path",
+    name: "Próbatétel",
+    description:
+      "Készítsd be választott haladó varázslatodat, és bizonyíts vele a párbajteremben.",
+    objectives: [
+      {
+        id: "prepare-advanced-year-two-spell",
+        type: "preparedSpell",
+        spellIds: ["crystal-echo", "vital-bloom", "unyielding-circle"],
+        required: 1,
+        description: "Készíts be legalább egy haladó II. évfolyamos varázsigét",
+      },
+      {
+        id: "win-three-new-trial-duels",
+        type: "progressSinceQuestActivation",
+        progressKey: "duelWins",
+        required: 3,
+        description: "Győzz három új normál párbajban a feladat megnyílása után",
+      },
+    ],
+    rewards: { xp: 350, gold: 275 },
+  },
+  {
+    id: "second-exam",
+    academyYear: 2,
+    prerequisiteQuestId: "year-two-trial",
+    name: "A második vizsga",
+    description:
+      "Bizonyítsd a Rúnakör Őre előtt, hogy készen állsz a második évfolyam lezárására.",
+    objectives: [
+      {
+        id: "reach-second-exam-level",
+        type: "minimumLevel",
+        required: 10,
+        description: "Érd el legalább a 10. szintet",
+      },
+      {
+        id: "win-second-exam",
+        type: "examVictory",
+        examId: "second-exam",
+        milestoneId: "second-exam",
+        required: 1,
+        description: "Győzd le a Rúnakör Őrét",
+      },
+    ],
+    rewards: { xp: 450, gold: 350 },
+    milestoneId: "second-exam",
+    yearCompletionMilestone: "second-year-complete",
+  },
+  {
+    id: "new-magic-trail",
+    academyYear: 3,
+    name: "Új mágia nyomában",
+    description:
+      "Fedezd fel a tartós mágikus hatások alapjait, és próbáld ki választott új varázslatodat párbajban.",
+    objectives: [
+      {
+        id: "attend-any-year-three-lesson",
+        type: "lessonAttendanceSinceQuestActivation",
+        curriculumYear: 3,
+        required: 1,
+        description: "Vegyél részt egy III. évfolyamos órán",
+      },
+      {
+        id: "prepare-year-three-spell",
+        type: "preparedSpell",
+        spellIds: ["rune-fracture", "venom-vine", "dampening-circle"],
+        required: 1,
+        description: "Készíts be legalább egy III. évfolyamos varázsigét",
+      },
+      {
+        id: "win-new-year-three-duel",
+        type: "progressSinceQuestActivation",
+        progressKey: "duelWins",
+        required: 1,
+        description: "Győzz egy új normál párbajban a feladat megnyílása után",
+      },
+    ],
+    rewards: { xp: 200, gold: 150 },
   },
 ];
 

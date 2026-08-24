@@ -1,20 +1,49 @@
 import {
-  getLessonAttendance,
-  getTotalLessonAttendance,
-} from "./lessonProgress";
+  getCurriculumProgress,
+  getTotalCurriculumProgress,
+} from "./curriculum";
 import { getAcademyYear } from "./academy";
 
+function getQuestBaselineKey(objective) {
+  if (objective.type === "progressSinceQuestActivation") {
+    return objective.progressKey;
+  }
+  if (objective.type === "lessonAttendanceSinceQuestActivation") {
+    return `lessonAttendancesByCurriculumYear:${objective.curriculumYear}`;
+  }
+  return null;
+}
+
+function getQuestActivityValue(objective, player) {
+  if (objective.type === "progressSinceQuestActivation") {
+    return player.progress[objective.progressKey] || 0;
+  }
+  if (objective.type === "lessonAttendanceSinceQuestActivation") {
+    return (
+      player.progress.lessonAttendancesByCurriculumYear?.[
+        objective.curriculumYear
+      ] || 0
+    );
+  }
+  return 0;
+}
+
 function getObjectiveProgress(objective, player, questId) {
-  if (objective.type === "lessonAttendance") {
-    const academicYear = objective.academicYear ?? 1;
+  if (objective.type === "curriculumProgress") {
     if (objective.lessonId) {
-      return getLessonAttendance(player, objective.lessonId, academicYear);
+      return getCurriculumProgress(player, objective.lessonId);
     }
-    return getTotalLessonAttendance(player, academicYear);
+    return getTotalCurriculumProgress(player);
   }
 
   if (objective.type === "knownSpell") {
     return player.knownSpells.includes(objective.spellId) ? 1 : 0;
+  }
+  if (objective.type === "curriculumMilestoneCount") {
+    return objective.lessonIds.filter(
+      (lessonId) =>
+        getCurriculumProgress(player, lessonId) >= objective.requiredProgress,
+    ).length;
   }
   if (objective.type === "preparedSpell") {
     return objective.spellIds.some((spellId) =>
@@ -23,9 +52,13 @@ function getObjectiveProgress(objective, player, questId) {
       ? 1
       : 0;
   }
-  if (objective.type === "progressSinceQuestActivation") {
-    const current = player.progress[objective.progressKey] || 0;
-    const baseline = player.questBaselines?.[questId]?.[objective.progressKey];
+  if (
+    objective.type === "progressSinceQuestActivation" ||
+    objective.type === "lessonAttendanceSinceQuestActivation"
+  ) {
+    const baselineKey = getQuestBaselineKey(objective);
+    const current = getQuestActivityValue(objective, player);
+    const baseline = player.questBaselines?.[questId]?.[baselineKey];
     if (!Number.isFinite(baseline) || baseline < 0) return 0;
     return Math.max(0, current - baseline);
   }
@@ -34,7 +67,11 @@ function getObjectiveProgress(objective, player, questId) {
   }
   if (objective.type === "minimumLevel") return player.level;
   if (objective.type === "examVictory") {
-    return player.completedMilestones.includes(objective.milestoneId) ? 1 : 0;
+    return player.completedMilestones.includes(
+      objective.examId || objective.milestoneId,
+    )
+      ? 1
+      : 0;
   }
 
   return player.progress[objective.type] || 0;
@@ -75,9 +112,12 @@ function getQuestStatus(quest, player) {
 }
 
 function isExamReady(quest, player) {
+  const examObjective = quest.objectives.find(
+    (objective) => objective.type === "examVictory",
+  );
   return (
     isQuestUnlocked(quest, player) &&
-    quest.objectives.some((objective) => objective.type === "examVictory") &&
+    Boolean(examObjective) &&
     quest.objectives
       .filter(
         (objective) => objective.type === "minimumLevel",
@@ -87,14 +127,26 @@ function isExamReady(quest, player) {
           getObjectiveProgress(objective, player, quest.id) >=
           objective.required,
       ) &&
-    !player.completedMilestones.includes("first-exam")
+    !player.completedMilestones.includes(
+      examObjective.examId || examObjective.milestoneId,
+    )
   );
 }
 
+function getQuestExamId(quest) {
+  const objective = quest.objectives.find(
+    (candidate) => candidate.type === "examVictory",
+  );
+  return objective?.examId || objective?.milestoneId || null;
+}
+
 export {
+  getQuestActivityValue,
+  getQuestBaselineKey,
   getObjectiveProgress,
   getQuestProgress,
   getQuestStatus,
   isQuestUnlocked,
   isExamReady,
+  getQuestExamId,
 };

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getQuestProgress, getQuestStatus, isExamReady } from "../utils/quests";
+import {
+  getQuestExamId,
+  getQuestProgress,
+  getQuestStatus,
+  isExamReady,
+} from "../utils/quests";
 import { formatAcademyYear, getAcademyYear } from "../utils/academy";
 import "./QuestsPage.css";
 
@@ -36,6 +41,7 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
     const isExamQuest = quest.objectives.some(
       (objective) => objective.type === "examVictory",
     );
+    const examId = getQuestExamId(quest);
     const levelRequirement = quest.objectives.find(
       (objective) => objective.type === "minimumLevel",
     );
@@ -130,7 +136,7 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
                 <button
                   className="button"
                   type="button"
-                  onClick={() => navigate("/duel?exam=first-exam")}
+                  onClick={() => navigate(`/duel?exam=${examId}`)}
                   disabled={isResting || !isExamReady(quest, player)}
                 >
                   {isExamReady(quest, player)

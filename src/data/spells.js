@@ -106,6 +106,98 @@ const spells = [
     requiredAcademyYear: 2,
     type: "shield",
   },
+  {
+    id: "crystal-echo",
+    name: "Kristályvisszhang",
+    description:
+      "Egy rezonáló kristályrúnát indít útjára, amely különösen könnyen talál kritikus pontot.",
+    manaCost: 16,
+    basePower: 22,
+    critChanceBonus: 15,
+    requiredLevel: 6,
+    requiredAcademyYear: 2,
+    type: "attack",
+  },
+  {
+    id: "vital-bloom",
+    name: "Éltető virágzás",
+    description:
+      "Éltető mágikus virágzást fakaszt, amely jelentősebb mennyiségű életerőt állít helyre.",
+    manaCost: 20,
+    healAmount: 32,
+    requiredLevel: 6,
+    requiredAcademyYear: 2,
+    type: "heal",
+  },
+  {
+    id: "unyielding-circle",
+    name: "Törhetetlen kör",
+    description:
+      "Mana-hatékony védőkört emel köréd, amely a Védelem után fennmaradó sebzést fogja fel, amíg el nem fogy.",
+    manaCost: 14,
+    shieldAmount: 20,
+    requiredLevel: 6,
+    requiredAcademyYear: 2,
+    type: "shield",
+  },
+  {
+    id: "rune-fracture",
+    name: "Rúnatörés",
+    description:
+      "Megtöri az ellenfél mágikus védelmének ritmusát, és előkészíti a következő támadásokat.",
+    manaCost: 18,
+    basePower: 20,
+    requiredLevel: 11,
+    requiredAcademyYear: 3,
+    type: "attack",
+    effect: {
+      id: "exposed",
+      name: "Sebezhető",
+      target: "enemy",
+      trigger: "playerDamagingAttack",
+      charges: 2,
+      magnitude: 15,
+    },
+  },
+  {
+    id: "venom-vine",
+    name: "Méreginda",
+    description:
+      "Mérgező mágikus indát idéz, amely a kezdeti csapás után is tovább gyengíti az ellenfelet.",
+    manaCost: 17,
+    basePower: 17,
+    requiredLevel: 11,
+    requiredAcademyYear: 3,
+    type: "attack",
+    effect: {
+      id: "venom",
+      name: "Mérgezett",
+      target: "enemy",
+      trigger: "enemyDamagingAction",
+      charges: 3,
+      damage: 6,
+      sourceName: "A Méreginda mérge",
+    },
+  },
+  {
+    id: "dampening-circle",
+    name: "Csillapító kör",
+    description:
+      "Átmeneti védőkört emel, amely mérsékli a következő ellenséges támadások erejét.",
+    manaCost: 16,
+    requiredLevel: 11,
+    requiredAcademyYear: 3,
+    type: "buff",
+    combatRole: "defense",
+    effect: {
+      id: "fortified",
+      name: "Megerősített védelem",
+      target: "player",
+      trigger: "enemyDamagingAttack",
+      charges: 3,
+      magnitude: 20,
+    },
+  },
 ];
 
 export default spells;

@@ -1,5 +1,6 @@
 const ACADEMY_YEAR_MILESTONES = [
   { year: 2, milestone: "first-year-complete" },
+  { year: 3, milestone: "second-year-complete" },
 ];
 
 function getAcademyYear(player) {

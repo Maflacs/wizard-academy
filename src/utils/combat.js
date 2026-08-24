@@ -35,5 +35,40 @@ function resolveShieldDamage(currentShield, incomingDamage) {
   };
 }
 
-export { applyShield, chooseEnemyAction, resolveShieldDamage };
+function applyTemporaryEffect(activeEffects, effect) {
+  const existing = activeEffects.find((candidate) => candidate.id === effect.id);
+  const nextEffect = existing
+    ? {
+        ...existing,
+        ...effect,
+        charges: Math.max(existing.charges, effect.charges),
+        magnitude: Math.max(existing.magnitude || 0, effect.magnitude || 0),
+        damage: Math.max(existing.damage || 0, effect.damage || 0),
+      }
+    : { ...effect };
+  return [
+    ...activeEffects.filter((candidate) => candidate.id !== effect.id),
+    nextEffect,
+  ];
+}
+
+function consumeTemporaryEffect(activeEffects, effectId) {
+  return activeEffects.flatMap((effect) => {
+    if (effect.id !== effectId) return [effect];
+    return effect.charges > 1 ? [{ ...effect, charges: effect.charges - 1 }] : [];
+  });
+}
+
+function getTemporaryEffect(activeEffects, effectId) {
+  return activeEffects.find((effect) => effect.id === effectId);
+}
+
+export {
+  applyShield,
+  applyTemporaryEffect,
+  chooseEnemyAction,
+  consumeTemporaryEffect,
+  getTemporaryEffect,
+  resolveShieldDamage,
+};
 export default applyDamageVariance;
