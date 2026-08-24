@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "./SpellsPage.css";
-import { getMaxManaForLevel } from "../utils/playerProgression";
+import { getEffectiveMaxMana } from "../utils/playerStats";
 import { formatAcademyYear } from "../utils/academy";
 
 const spellTypeLabels = {
@@ -14,11 +14,12 @@ function SpellsPage({
   knownSpells,
   preparedSpells,
   spells,
+  items,
   player,
   onUpdatePreparedSpells,
 }) {
   const [message, setMessage] = useState("");
-  const maxMana = getMaxManaForLevel(player.level);
+  const maxMana = getEffectiveMaxMana(player, items);
   const learnedSpells = knownSpells
     .map((spellId) => spells.find((spell) => spell.id === spellId))
     .filter((spell) => spell);

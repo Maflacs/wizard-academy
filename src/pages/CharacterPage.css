@@ -44,6 +44,12 @@ h3.eyebrow.title {
   font-size: 12px;
   font-weight: bold;
 }
+.stats dd small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: normal;
+}
 .stats dd {
   white-space: nowrap;
 }
@@ -96,6 +102,12 @@ h3.eyebrow.title {
 .equipment-section li {
   flex-wrap: wrap;
 }
+.equipment-bonuses {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
 .inventory-actions {
   display: flex;
   align-items: center;
@@ -125,6 +137,12 @@ h3.eyebrow.title {
 }
 .inventory li strong {
   color: var(--red);
+}
+.inventory-item-bonuses {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .inventory-empty {
   margin: 16px 0 0;

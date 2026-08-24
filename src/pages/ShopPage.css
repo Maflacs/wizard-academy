@@ -27,6 +27,15 @@
   font-size: 14px;
   font-weight: bold;
 }
+.item-requirement,
+.equipped-item-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.equipped-item-hint {
+  color: var(--red);
+  font-weight: bold;
+}
 .item-mark {
   color: var(--red);
   font-size: 30px;

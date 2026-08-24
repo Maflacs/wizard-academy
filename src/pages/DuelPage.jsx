@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import getEffectiveStats from "../utils/playerStats";
+import getEffectiveStats, {
+  getEffectiveMaxMana,
+} from "../utils/playerStats";
 import applyDamageVariance, {
   applyShield,
   chooseEnemyAction,
@@ -9,7 +11,6 @@ import applyDamageVariance, {
 import createScaledEnemy from "../utils/enemyScaling";
 import {
   getMaxHealthForLevel,
-  getMaxManaForLevel,
 } from "../utils/playerProgression";
 import { getAcademyYear } from "../utils/academy";
 import "./DuelPage.css";
@@ -71,16 +72,17 @@ function getDuelBlockMessage({
   return null;
 }
 
-function createDuelState(enemy, playerLevel, playerHealth) {
-  const scaledEnemy = createScaledEnemy(enemy, playerLevel);
-  const maxHealth = getMaxHealthForLevel(playerLevel);
+function createDuelState(enemy, player, items) {
+  const scaledEnemy = createScaledEnemy(enemy, player.level);
+  const maxHealth = getMaxHealthForLevel(player.level);
+  const maxMana = getEffectiveMaxMana(player, items);
   return {
     scaledEnemy,
     enemyHealth: scaledEnemy.maxHealth,
-    combatHealth: Math.min(maxHealth, Math.max(0, playerHealth)),
-    combatMana: getMaxManaForLevel(playerLevel),
-    maxHealth: getMaxHealthForLevel(playerLevel),
-    maxMana: getMaxManaForLevel(playerLevel),
+    combatHealth: Math.min(maxHealth, Math.max(0, player.health)),
+    combatMana: maxMana,
+    maxHealth,
+    maxMana,
     combatShield: 0,
     combatShieldName: null,
     enemyShield: 0,
@@ -323,8 +325,8 @@ function DuelPage({
   const [duel, setDuel] = useState(() =>
     createDuelState(
       isExamMode ? examOpponent : chooseRandom(normalEnemies),
-      player.level,
-      player.health,
+      player,
+      items,
     ),
   );
   const [combatLog, setCombatLog] = useState([
@@ -339,7 +341,7 @@ function DuelPage({
   const [victorySummary, setVictorySummary] = useState(null);
   const effectiveStats = getEffectiveStats(player, items);
   const combatMaxHealth = getMaxHealthForLevel(player.level);
-  const combatMaxMana = getMaxManaForLevel(player.level);
+  const combatMaxMana = duel.maxMana;
   const availableSpells = (player.preparedSpells || [])
     .map((spellId) => spells.find((spell) => spell.id === spellId))
     .filter(
@@ -366,8 +368,8 @@ function DuelPage({
     }
     const nextDuel = createDuelState(
       isExamMode ? examOpponent : chooseRandom(normalEnemies),
-      player.level,
-      player.health,
+      player,
+      items,
     );
     setDuel(nextDuel);
     setCombatLog([`${nextDuel.scaledEnemy.name} megjelent a párbajban.`]);

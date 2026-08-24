@@ -298,6 +298,10 @@ function App() {
 
   function purchaseItem(item) {
     if (blockWhileResting()) return;
+    if (getAcademyYear(player) < (item.requiredAcademyYear ?? 1)) {
+      notify("Ezt a tárgyat még nem vásárolhatod meg ezen az évfolyamon.", "error");
+      return;
+    }
     if (player.gold < item.price) {
       notify("Nincs elegendő aranyad ehhez a tárgyhoz.", "error");
       return;
@@ -333,7 +337,11 @@ function App() {
       (inventoryItem) =>
         inventoryItem.itemId === item.id && inventoryItem.quantity > 0,
     );
-    if (item.type !== "equipment" || !ownsItem) {
+    if (
+      item.type !== "equipment" ||
+      !ownsItem ||
+      getAcademyYear(player) < (item.requiredAcademyYear ?? 1)
+    ) {
       notify("Ezt a tárgyat nem szerelheted fel.", "error");
       return;
     }
@@ -639,6 +647,7 @@ function App() {
                 knownSpells={player.knownSpells}
                 preparedSpells={player.preparedSpells}
                 spells={spells}
+                items={items}
                 player={player}
                 onUpdatePreparedSpells={updatePreparedSpells}
               />

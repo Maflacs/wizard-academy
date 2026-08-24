@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import getEffectiveStats, { getEquipmentBonuses } from "../utils/playerStats";
+import getEffectiveStats, {
+  getEffectiveMaxMana,
+  getEquipmentBonuses,
+} from "../utils/playerStats";
 import { getXpRequiredForLevel } from "../utils/leveling";
 import {
   getMaxHealthForLevel,
@@ -7,6 +10,7 @@ import {
 } from "../utils/playerProgression";
 import getStatUpgradeCost from "../utils/statUpgrades";
 import { formatAcademyYear } from "../utils/academy";
+import { formatItemBonuses } from "../utils/items";
 import "./CharacterPage.css";
 
 const equipmentSlots = [
@@ -69,7 +73,8 @@ function CharacterPage({
   const xpRequired = getXpRequiredForLevel(player.level);
   const xpRemaining = Math.max(0, xpRequired - player.xp);
   const maxHealth = getMaxHealthForLevel(player.level);
-  const maxMana = getMaxManaForLevel(player.level);
+  const baseMaxMana = getMaxManaForLevel(player.level);
+  const maxMana = getEffectiveMaxMana(player, items);
 
   return (
     <section className="page">
@@ -129,7 +134,13 @@ function CharacterPage({
           </div>
           <div>
             <dt>Mana</dt>
-            <dd>Harci mana: {maxMana}</dd>
+            <dd>
+              Harci mana: {maxMana}
+              <small>
+                Alap: {baseMaxMana} · Felszerelés: +
+                {equipmentBonuses.maxMana}
+              </small>
+            </dd>
           </div>
         </dl>
         {energyStatus.countdown ? (
@@ -167,6 +178,11 @@ function CharacterPage({
                 <strong>
                   {slot.item ? slot.item.name : "Nincs felszerelve"}
                 </strong>
+                {slot.item && (
+                  <small className="equipment-bonuses">
+                    {formatItemBonuses(slot.item).join(" · ")}
+                  </small>
+                )}
                 {slot.item && (
                   <button
                     className="text-button"
@@ -236,7 +252,14 @@ function CharacterPage({
           <ul>
             {inventoryItems.map((inventoryItem) => (
               <li key={inventoryItem.itemId}>
-                <span>{inventoryItem.item.name}</span>
+                <span>
+                  {inventoryItem.item.name}
+                  {inventoryItem.item.bonuses && (
+                    <small className="inventory-item-bonuses">
+                      {formatItemBonuses(inventoryItem.item).join(" · ")}
+                    </small>
+                  )}
+                </span>
                 <span className="inventory-actions">
                   <strong>{inventoryItem.quantity} db</strong>
                   {inventoryItem.item.type === "equipment" &&
