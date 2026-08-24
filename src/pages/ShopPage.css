@@ -27,6 +27,16 @@
   font-size: 14px;
   font-weight: bold;
 }
+.shop-section-title {
+  margin: 30px 0 -20px;
+  color: var(--red);
+  font-family: Cinzel, Georgia, serif;
+  font-size: 16px;
+  text-transform: uppercase;
+}
+.owned-items-title {
+  margin-top: 42px;
+}
 .item-requirement,
 .equipped-item-hint {
   color: var(--muted);
@@ -48,6 +58,24 @@
   color: var(--muted);
   font-size: 12px;
   font-style: italic;
+}
+.sell-hint,
+.shop-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+.shop-empty {
+  margin-top: 34px;
+  font-size: 14px;
+}
+.shop-message {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--gold);
+  color: var(--red);
+  background: rgba(255, 249, 226, 0.65);
+  font-weight: bold;
 }
 .item .button {
   margin-top: auto;

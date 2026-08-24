@@ -30,6 +30,7 @@ import {
   incrementLessonAttendance,
   migrateLessonProgress,
 } from "./utils/lessonProgress";
+import { getItemSellPrice, isItemSellable } from "./utils/items";
 
 const initialPlayer = {
   name: "Névtelen tanonc",
@@ -329,6 +330,39 @@ function App() {
       },
     });
     notify(`${item.name} bekerült a táskádba.`, "success");
+  }
+
+  function sellItem(item) {
+    if (blockWhileResting()) return null;
+    const catalogItem = items.find((candidate) => candidate.id === item.id);
+    const inventoryItem = player.inventory.find(
+      (candidate) => candidate.itemId === item.id,
+    );
+    const isEquipped = Object.values(player.equipment).includes(item.id);
+    if (
+      !catalogItem ||
+      !inventoryItem ||
+      inventoryItem.quantity < 1 ||
+      !isItemSellable(catalogItem) ||
+      isEquipped
+    ) {
+      return null;
+    }
+
+    const sellPrice = getItemSellPrice(catalogItem);
+    const inventory = player.inventory
+      .map((candidate) =>
+        candidate.itemId === item.id
+          ? { ...candidate, quantity: candidate.quantity - 1 }
+          : candidate,
+      )
+      .filter((candidate) => candidate.quantity > 0);
+    persistPlayer({
+      ...player,
+      gold: player.gold + sellPrice,
+      inventory,
+    });
+    return { sellPrice };
   }
 
   function equipItem(item) {
@@ -659,6 +693,7 @@ function App() {
               <ShopPage
                 player={player}
                 onPurchaseItem={purchaseItem}
+                onSellItem={sellItem}
                 isResting={player.isResting}
               />
             }
