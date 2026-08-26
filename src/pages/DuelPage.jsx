@@ -21,26 +21,55 @@ function chooseRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function isDefensiveTemporaryEffect(action) {
+  return Boolean(
+    action.effect?.target === "player" &&
+      action.effect.trigger === "enemyDamagingAttack" &&
+      action.effect.magnitude,
+  );
+}
+
+function getDefensiveTemporaryEffectAutoWeight(action, state) {
+  if (!isDefensiveTemporaryEffect(action)) return null;
+  const healthRatio = state.combatHealth / state.maxHealth;
+  const activeEffect = getTemporaryEffect(
+    state.activeEffects[action.effect.target],
+    action.effect.id,
+  );
+  if (healthRatio > 0.8 || activeEffect?.charges > 1) return 0;
+  return healthRatio > 0.55 ? 1 : 5;
+}
+
 function chooseWeightedAutoAction(actions, state, previousActionType) {
   const hasPreparedAttack = actions.some((action) => action.type === "attack");
   const eligibleActions =
     previousActionType === "shield" && hasPreparedAttack
       ? actions.filter((action) => action.type !== "shield")
       : actions;
+  const healthEligibleActions = eligibleActions.filter(
+    (action) => getDefensiveTemporaryEffectAutoWeight(action, state) !== 0,
+  );
   const healthRatio = state.combatHealth / state.maxHealth;
-  const weightedActions = eligibleActions.map((action) => {
+  const weightedActions = healthEligibleActions.map((action) => {
     let weight = 1;
+    const defensiveEffectWeight = getDefensiveTemporaryEffectAutoWeight(
+      action,
+      state,
+    );
     if (action.type === "attack" || action.id === basicAttack.id) {
       weight = healthRatio > 0.75 ? 5 : healthRatio >= 0.4 ? 3 : 2;
     } else if (action.type === "shield") {
       weight = healthRatio > 0.75 ? 1 : healthRatio >= 0.4 ? 3 : 5;
     } else if (action.type === "heal") {
       weight = healthRatio >= 0.4 ? 4 : 6;
+    } else if (defensiveEffectWeight !== null) {
+      weight = defensiveEffectWeight;
     } else if (action.type === "buff") {
       weight = healthRatio >= 0.75 ? 1 : healthRatio >= 0.4 ? 3 : 5;
     }
     if (
       action.effect &&
+      !isDefensiveTemporaryEffect(action) &&
       !getTemporaryEffect(
         state.activeEffects[action.effect.target],
         action.effect.id,
@@ -131,6 +160,11 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       state.combatMana < spell.manaCost
     )
       return;
+    if (
+      automatic &&
+      getDefensiveTemporaryEffectAutoWeight(spell, state) === 0
+    )
+      return;
     if (automatic && spell.effect) {
       const targetEffects = state.activeEffects[spell.effect.target];
       const activeEffect = getTemporaryEffect(targetEffects, spell.effect.id);
@@ -145,15 +179,8 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
         spell.effect.trigger === "playerDamagingAttack" &&
         followUpAttacks.length > 0 &&
         followUpAttacks.every(
-            (candidate) =>
-              state.combatMana - spell.manaCost < candidate.manaCost,
-          )
-      )
-        return;
-      if (
-        spell.effect.target === "player" &&
-        spell.effect.trigger === "enemyDamagingAttack" &&
-        state.combatHealth >= state.maxHealth * 0.75
+          (candidate) => state.combatMana - spell.manaCost < candidate.manaCost,
+        )
       )
         return;
     }
@@ -221,6 +248,40 @@ function damageEnemyThroughShield(state, damage, sourceName, addLog) {
   }
 }
 
+function getPlayerAttackAmplifyingEffect(state) {
+  return state.activeEffects.enemy.find(
+    (effect) => effect.trigger === "playerDamagingAttack" && effect.magnitude,
+  );
+}
+
+function logPreservedTemporaryEffect(
+  state,
+  target,
+  effectBeforeAction,
+  addLog,
+) {
+  if (!effectBeforeAction) return;
+  const activeEffect = state.activeEffects[target].find(
+    (effect) => effect.id === effectBeforeAction.id,
+  );
+  if (activeEffect) {
+    addLog(
+      `A ${activeEffect.name} hatás továbbra is aktív. Hátralévő alkalmak: ${activeEffect.charges}.`,
+    );
+  }
+}
+
+function logConsumedDamageOverTimeEffect(state, effect, addLog) {
+  const activeEffect = state.activeEffects.enemy.find(
+    (candidate) => candidate.id === effect.id,
+  );
+  addLog(
+    activeEffect
+      ? `A ${effect.name} hatás továbbra is aktív. Hátralévő alkalmak: ${activeEffect.charges}.`
+      : `A ${effect.name} hatás megszűnt.`,
+  );
+}
+
 function performEnemyAction(state, effectiveStats, addLog) {
   const shieldOnCooldown = state.enemyShieldCooldown > 0;
   if (shieldOnCooldown) state.enemyShieldCooldown -= 1;
@@ -234,11 +295,11 @@ function performEnemyAction(state, effectiveStats, addLog) {
     actions: availableActions,
   });
   const isDamagingAction = ["attack", "heavyAttack"].includes(action.type);
+  const venom = state.activeEffects.enemy.find(
+    (effect) =>
+      effect.trigger === "enemyDamagingAction" && effect.damage !== undefined,
+  );
   if (isDamagingAction) {
-    const venom = state.activeEffects.enemy.find(
-      (effect) =>
-        effect.trigger === "enemyDamagingAction" && effect.damage !== undefined,
-    );
     if (venom) {
       state.activeEffects = {
         ...state.activeEffects,
@@ -250,6 +311,7 @@ function performEnemyAction(state, effectiveStats, addLog) {
         venom.sourceName || venom.name,
         addLog,
       );
+      logConsumedDamageOverTimeEffect(state, venom, addLog);
       if (state.enemyHealth <= 0) return;
     }
   }
@@ -264,6 +326,7 @@ function performEnemyAction(state, effectiveStats, addLog) {
         ? `${state.scaledEnemy.name} megerősítette mágikus védőburkát. Pajzs ereje: ${state.enemyShield}.`
         : `${state.scaledEnemy.name} mágikus védőburkot vont maga köré. Pajzs ereje: ${state.enemyShield}.`,
     );
+    logPreservedTemporaryEffect(state, "enemy", venom, addLog);
     return;
   }
   if (
@@ -276,6 +339,7 @@ function performEnemyAction(state, effectiveStats, addLog) {
     );
     state.enemyHealth += healed;
     addLog(`${state.scaledEnemy.name} ${healed} életerőt állított helyre.`);
+    logPreservedTemporaryEffect(state, "enemy", venom, addLog);
     return;
   }
   const heavy = action.type === "heavyAttack";
@@ -290,17 +354,24 @@ function performEnemyAction(state, effectiveStats, addLog) {
     (effect) => effect.trigger === "enemyDamagingAttack" && effect.magnitude,
   );
   if (fortified) {
+    const damageBeforeFortified = incoming;
     incoming = Math.max(
       1,
       Math.round(incoming * (1 - fortified.magnitude / 100)),
     );
     state.activeEffects = {
       ...state.activeEffects,
-      player: consumeTemporaryEffect(
-        state.activeEffects.player,
-        fortified.id,
-      ),
+      player: consumeTemporaryEffect(state.activeEffects.player, fortified.id),
     };
+    const remainingFortified = state.activeEffects.player.find(
+      (effect) => effect.id === fortified.id,
+    );
+    const preventedDamage = damageBeforeFortified - incoming;
+    addLog(
+      remainingFortified
+        ? `${fortified.name} ${preventedDamage} sebzést csillapított. Hátralévő alkalmak: ${remainingFortified.charges}.`
+        : `${fortified.name} ${preventedDamage} sebzést csillapított és megszűnt.`,
+    );
   }
   if (state.combatShield > 0) {
     const shieldName = state.combatShieldName || "Védőpajzsod";
@@ -337,17 +408,27 @@ function performEnemyAction(state, effectiveStats, addLog) {
 function performPlayerAttack(state, spell, effectiveStats, addLog) {
   const result = getAttackDamage(spell, effectiveStats);
   let damage = typeof result === "number" ? result : result.damage;
-  const exposed = state.activeEffects.enemy.find(
-    (effect) => effect.trigger === "playerDamagingAttack" && effect.magnitude,
-  );
+  let consumedExposed = null;
+  const exposed = getPlayerAttackAmplifyingEffect(state);
   if (exposed) {
     damage = Math.max(1, Math.round(damage * (1 + exposed.magnitude / 100)));
     state.activeEffects = {
       ...state.activeEffects,
       enemy: consumeTemporaryEffect(state.activeEffects.enemy, exposed.id),
     };
+    consumedExposed = exposed;
   }
   damageEnemyThroughShield(state, damage, spell.name, addLog);
+  if (consumedExposed) {
+    const remainingExposed = state.activeEffects.enemy.find(
+      (effect) => effect.id === consumedExposed.id,
+    );
+    addLog(
+      remainingExposed
+        ? `A ${consumedExposed.name} hatás felerősítette a támadást. Hátralévő alkalmak: ${remainingExposed.charges}.`
+        : `A ${consumedExposed.name} hatás felerősítette a támadást és megszűnt.`,
+    );
+  }
 
   if (spell.healAmount !== undefined) {
     const healed = Math.min(
@@ -378,6 +459,7 @@ function simulateDuel(player, spells, items, duelState) {
   for (let turn = 0; turn < maxAutoTurns; turn += 1) {
     const actions = getUsablePlayerActions(player, spells, state, true);
     const action = chooseWeightedAutoAction(actions, state, previousActionType);
+    const preservedAttackEffect = getPlayerAttackAmplifyingEffect(state);
     state.combatMana -= action.manaCost;
     if (action.type === "attack" || action.id === basicAttack.id) {
       performPlayerAttack(state, action, effectiveStats, addLog);
@@ -390,6 +472,12 @@ function simulateDuel(player, spells, items, duelState) {
           ? `Újra felállítottad a ${action.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
           : `${action.name} varázslatot idéztél. Pajzsod ereje: ${state.combatShield}.`,
       );
+      logPreservedTemporaryEffect(
+        state,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
+      );
     } else if (action.type === "heal") {
       const healed = Math.min(
         action.healAmount,
@@ -397,8 +485,20 @@ function simulateDuel(player, spells, items, duelState) {
       );
       state.combatHealth += healed;
       addLog(`${action.name} ${healed} életerőt állított helyre.`);
+      logPreservedTemporaryEffect(
+        state,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
+      );
     } else if (action.type === "buff") {
       applySpellEffect(state, action.effect, addLog);
+      logPreservedTemporaryEffect(
+        state,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
+      );
     }
     previousActionType = action.type || "attack";
     if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
@@ -554,6 +654,7 @@ function DuelPage({
     )
       return;
     const nextDuel = { ...duel, combatMana: duel.combatMana - spell.manaCost };
+    const preservedAttackEffect = getPlayerAttackAmplifyingEffect(nextDuel);
     if (spell.type === "attack" || spell.id === basicAttack.id) {
       performPlayerAttack(nextDuel, spell, effectiveStats, addLog);
     } else if (spell.type === "shield") {
@@ -562,8 +663,14 @@ function DuelPage({
       nextDuel.combatShieldName = spell.name;
       addLog(
         hadShield
-          ? `Újra megerősítetted a ${spell.name} varázslatot. Pajzsod ereje: ${nextDuel.combatShield}.`
+          ? `Újra felállítottad a ${spell.name} varázslatot. Pajzsod ereje: ${nextDuel.combatShield}.`
           : `${spell.name} varázslatot idéztél. Pajzsod ereje: ${nextDuel.combatShield}.`,
+      );
+      logPreservedTemporaryEffect(
+        nextDuel,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
       );
     } else if (spell.type === "heal") {
       const healed = Math.min(
@@ -572,8 +679,20 @@ function DuelPage({
       );
       nextDuel.combatHealth += healed;
       addLog(`${spell.name} ${healed} életerőt állított helyre.`);
+      logPreservedTemporaryEffect(
+        nextDuel,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
+      );
     } else if (spell.type === "buff") {
       applySpellEffect(nextDuel, spell.effect, addLog);
+      logPreservedTemporaryEffect(
+        nextDuel,
+        "enemy",
+        preservedAttackEffect,
+        addLog,
+      );
     }
     if (nextDuel.enemyHealth <= 0) {
       setDuel(nextDuel);
@@ -687,8 +806,8 @@ function DuelPage({
                   )}
                   {spell.effect?.damage !== undefined && (
                     <p>
-                      Méreg: {spell.effect.damage} sebzés, {spell.effect.charges}{" "}
-                      alkalommal
+                      Méreg: {spell.effect.damage} sebzés,{" "}
+                      {spell.effect.charges} alkalommal
                     </p>
                   )}
                   {spell.type === "attack" &&
