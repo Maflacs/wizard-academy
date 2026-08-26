@@ -330,6 +330,41 @@ const quests = [
     ],
     rewards: { xp: 200, gold: 150 },
   },
+  {
+    id: "interwoven-magic",
+    academyYear: 3,
+    prerequisiteQuestId: "new-magic-trail",
+    name: "Az összefonódó mágia",
+    description:
+      "Az igazán fejlett mágia nem elszigetelt varázslatokból, hanem egymásra épülő hatásokból születik.",
+    objectives: [
+      {
+        id: "complete-two-year-three-subjects",
+        type: "curriculumMilestoneCount",
+        lessonIds: ["charms", "herbology", "defensive-magic"],
+        requiredProgress: 18,
+        required: 2,
+        description:
+          "Teljesítsd a III. évfolyam tananyagát legalább 2 tantárgyból",
+      },
+      {
+        id: "prepare-year-three-combo-spell",
+        type: "preparedSpell",
+        spellIds: ["rune-detonation", "venom-harvest", "guardian-bastion"],
+        required: 1,
+        description:
+          "Készíts be legalább egy összetett III. évfolyamos varázslatot",
+      },
+      {
+        id: "win-three-new-combo-duels",
+        type: "progressSinceQuestActivation",
+        progressKey: "duelWins",
+        required: 3,
+        description: "Győzz három új normál párbajban a feladat megnyílása után",
+      },
+    ],
+    rewards: { xp: 400, gold: 300 },
+  },
 ];
 
 export default quests;

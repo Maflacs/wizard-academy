@@ -12,6 +12,7 @@ const lessons = [
       { spellId: "rune-lance", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
       { spellId: "crystal-echo", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
       { spellId: "rune-fracture", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
+      { spellId: "rune-detonation", requiredProgress: 18, requiredLevel: 13, requiredAcademyYear: 3 },
     ],
   },
   {
@@ -27,6 +28,7 @@ const lessons = [
       { spellId: "draining-vine", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
       { spellId: "vital-bloom", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
       { spellId: "venom-vine", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
+      { spellId: "venom-harvest", requiredProgress: 18, requiredLevel: 13, requiredAcademyYear: 3 },
     ],
   },
   {
@@ -42,6 +44,7 @@ const lessons = [
       { spellId: "reinforced-ward", requiredProgress: 9, requiredLevel: 5, requiredAcademyYear: 2 },
       { spellId: "unyielding-circle", requiredProgress: 12, requiredLevel: 6, requiredAcademyYear: 2 },
       { spellId: "dampening-circle", requiredProgress: 15, requiredLevel: 11, requiredAcademyYear: 3 },
+      { spellId: "guardian-bastion", requiredProgress: 18, requiredLevel: 13, requiredAcademyYear: 3 },
     ],
   },
 ];

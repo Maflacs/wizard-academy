@@ -4,6 +4,7 @@ import { getEffectiveMaxMana } from "../utils/playerStats";
 import { formatAcademyYear, getAcademyYear } from "../utils/academy";
 import { getCurriculumProgress, isSpellCurrentlyEligible } from "../utils/curriculum";
 import {
+  getSpellDependency,
   getSpellQuickStats,
   getSpellRole,
   spellRoleLabels,
@@ -14,17 +15,17 @@ const roleFilters = [
   ...Object.entries(spellRoleLabels).map(([id, label]) => ({ id, label })),
 ];
 
-function QuickStats({ spell }) {
+function QuickStats({ spell, spells }) {
   return (
     <div className="spell-quick-stats">
-      {getSpellQuickStats(spell).map((stat) => (
+      {getSpellQuickStats(spell, spells).map((stat) => (
         <span key={stat.id}>{stat.label}</span>
       ))}
     </div>
   );
 }
 
-function PreparedSpellSummary({ spell }) {
+function PreparedSpellSummary({ spell, spells }) {
   return (
     <>
       <span className="prepared-spell-role">
@@ -32,13 +33,20 @@ function PreparedSpellSummary({ spell }) {
       </span>
       <strong>{spell.name}</strong>
       <span className="prepared-spell-summary">
-        {getSpellQuickStats(spell).map((stat) => stat.label).join(" · ")}
+        {getSpellQuickStats(spell, spells).map((stat) => stat.label).join(" · ")}
       </span>
     </>
   );
 }
 
-function SpellDetails({ spell }) {
+function SpellDetails({ spell, spells }) {
+  const dependency = getSpellDependency(spell, spells);
+  const conversionExamples = dependency?.sourceEffect?.charges
+    ? Array.from(
+        { length: dependency.sourceEffect.charges + 1 },
+        (_, index) => dependency.sourceEffect.charges - index,
+      )
+    : [];
   return (
     <div className="spell-expanded-details">
       <dl className="spell-details">
@@ -50,9 +58,13 @@ function SpellDetails({ spell }) {
         {spell.effect?.trigger === "playerDamagingAttack" && <div><dt>{spell.effect.name}</dt><dd>+{spell.effect.magnitude}% · {spell.effect.charges} támadás</dd></div>}
         {spell.effect?.damage !== undefined && <div><dt>{spell.effect.name}</dt><dd>{spell.effect.damage} sebzés · {spell.effect.charges} alkalom</dd></div>}
         {spell.effect?.trigger === "enemyDamagingAttack" && <div><dt>{spell.effect.name}</dt><dd>-{spell.effect.magnitude}% · {spell.effect.charges} támadás</dd></div>}
+        {spell.effectInteraction?.mode === "consume-all-for-damage" && <div><dt>Sebezhető átalakítása</dt><dd>+{spell.effectInteraction.damageBonusPerCharge}% / hátralévő alkalom</dd></div>}
+        {spell.effectInteraction?.mode === "consume-all-damage-ticks" && <div><dt>Mérgezett átalakítása</dt><dd>Hátralévő hatások azonnal</dd></div>}
+        {spell.effectInteraction?.mode === "consume-all-for-shield" && <div><dt>Alappajzs</dt><dd>{spell.effectInteraction.baseShieldAmount}</dd></div>}
+        {spell.effectInteraction?.mode === "consume-all-for-shield" && <div><dt>{spell.effectInteraction.effectName}</dt><dd>+{spell.effectInteraction.shieldPerCharge} pajzs / alkalom</dd></div>}
         <div><dt>Szükséges szint</dt><dd>{spell.requiredLevel}</dd></div>
       </dl>
-      {spell.type === "shield" && (
+      {spell.type === "shield" && !spell.effectInteraction && (
         <div className="spell-mechanics">
           <p><strong>Időtartam:</strong> amíg a pajzs el nem fogy.</p>
           <p><strong>Sebzésfelfogás:</strong> a Védelem után fennmaradó sebzést fogja fel.</p>
@@ -77,6 +89,50 @@ function SpellDetails({ spell }) {
           A Védelem után {spell.effect.magnitude}%-kal csökkenti a következő{" "}
           {spell.effect.charges} ellenséges támadás sebzését, még a pajzs előtt.
         </p>
+      )}
+      {spell.effectInteraction?.mode === "consume-all-for-damage" && (
+        <p className="spell-mechanics">
+          Sebezhető célpont ellen a megmaradt Sebezhető alkalmakat
+          felhasználja, és alkalmanként +
+          {spell.effectInteraction.damageBonusPerCharge}% sebzést okoz. Nem
+          kapja meg emellett a Sebezhető szokásos sebzésbónuszát.
+        </p>
+      )}
+      {spell.effectInteraction?.mode === "consume-all-damage-ticks" && (
+        <p className="spell-mechanics">
+          A normál találat után az összes megmaradt Mérgezett alkalmat azonnal
+          aktiválja. A méreg változatlan sebzést okoz, amelyet az ellenséges
+          pajzs továbbra is felfoghat.
+        </p>
+      )}
+      {spell.effectInteraction?.mode === "consume-all-for-shield" && (
+        <div className="spell-mechanics">
+          {dependency && (
+            <p>
+              A {dependency.effectName} hatást a {dependency.sourceSpell.name}{" "}
+              hozza létre; ez az {spell.name} opcionális erősítése.
+            </p>
+          )}
+          <p>
+            Az {spell.name} önmagában {spell.effectInteraction.baseShieldAmount}{" "}
+            pajzserőt biztosít.
+          </p>
+          <p>
+            Ha aktív {spell.effectInteraction.effectName} hatásod van, az
+            {spell.name} felhasználja annak összes hátralévő alkalmát, és
+            alkalmanként további {spell.effectInteraction.shieldPerCharge}{" "}
+            pajzserőt ad.
+          </p>
+          {conversionExamples.length > 0 && (
+            <p>
+              Példák: {conversionExamples.map(
+                (charges) =>
+                  `${charges} alkalom → ${spell.effectInteraction.baseShieldAmount + charges * spell.effectInteraction.shieldPerCharge} pajzs`,
+              ).join(" · ")}
+            </p>
+          )}
+          <p><strong>Halmozódás:</strong> nem; gyengébb pajzs nem írhat felül erősebbet.</p>
+        </div>
       )}
       {spell.type === "attack" && spell.healAmount !== undefined && (
         <p className="spell-mechanics">A találat a feltüntetett értékkel gyógyít, de nem emeli az életerőt a maximum fölé.</p>
@@ -142,6 +198,19 @@ function SpellsPage({ knownSpells, preparedSpells, spells, lessons, items, playe
       (roleFilter === "all" || getSpellRole(spell) === roleFilter) &&
       (yearFilter === "all" || (spell.requiredAcademyYear ?? 1) === Number(yearFilter)),
   );
+  const missingPreparedDependencies = preparedSpells.flatMap((spellId) => {
+    const spell = spells.find((candidate) => candidate.id === spellId);
+    if (!spell) return [];
+    const dependency = getSpellDependency(spell, spells);
+    if (
+      !dependency ||
+      spell.effectInteraction.effectOptional ||
+      preparedSpells.includes(dependency.sourceSpell.id)
+    ) {
+      return [];
+    }
+    return [{ spell, dependency }];
+  });
 
   useEffect(() => {
     if (!message) return undefined;
@@ -225,17 +294,24 @@ function SpellsPage({ knownSpells, preparedSpells, spells, lessons, items, playe
                 onClick={() => replacePreparedSpell(spell.id)}
                 aria-label={`${spell.name} lecserélése`}
               >
-                <PreparedSpellSummary spell={spell} />
+                <PreparedSpellSummary spell={spell} spells={spells} />
                 <span className="replacement-target-label">Ezt cserélem le</span>
               </button>
             ) : (
               <article className="prepared-spell-slot" key={spell.id}>
-                <PreparedSpellSummary spell={spell} />
+                <PreparedSpellSummary spell={spell} spells={spells} />
                 <button className="text-button" type="button" onClick={() => updatePreparedSpell(spell.id, false)}>Kiveszem</button>
               </article>
             );
           })}
         </div>
+        {missingPreparedDependencies.map(({ spell, dependency }) => (
+          <p className="spellbook-message" role="status" key={spell.id}>
+            A {spell.name} használatához {dependency.effectName} szükséges,
+            amelyet a {dependency.sourceSpell.name} hoz létre. A{" "}
+            {dependency.sourceSpell.name} jelenleg nincs bekészítve.
+          </p>
+        ))}
       </div>
       <div className="parchment-panel spell-filters">
         <FilterTabs label="Típus" options={roleFilters} value={roleFilter} onChange={setRoleFilter} />
@@ -263,7 +339,7 @@ function SpellsPage({ knownSpells, preparedSpells, spells, lessons, items, playe
                   <div className="spell-state"><strong>{isKnown ? "Megtanulva" : "Zárolva"}</strong>{prepared && <span>Bekészítve</span>}</div>
                 </div>
                 <p className="spell-description">{spell.description}</p>
-                <QuickStats spell={spell} />
+                <QuickStats spell={spell} spells={spells} />
                 <p className="spell-year">{formatAcademyYear(spell.requiredAcademyYear ?? 1)} évfolyam</p>
                 {replacementSpellId === spell.id && (
                   <p className="replacement-source-label">
@@ -284,7 +360,7 @@ function SpellsPage({ knownSpells, preparedSpells, spells, lessons, items, playe
                   </div>
                 )}
                 <button className="text-button spell-details-toggle" type="button" onClick={() => toggleDetails(spell.id)} aria-expanded={expanded}>Részletek {expanded ? "▴" : "▾"}</button>
-                {expanded && <SpellDetails spell={spell} />}
+                {expanded && <SpellDetails spell={spell} spells={spells} />}
                 <div className="spell-card-action">
                   {!canPrepare ? (
                     <button className="button" type="button" disabled>Zárolva</button>

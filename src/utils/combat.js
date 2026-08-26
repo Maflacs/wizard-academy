@@ -63,12 +63,17 @@ function getTemporaryEffect(activeEffects, effectId) {
   return activeEffects.find((effect) => effect.id === effectId);
 }
 
+function removeTemporaryEffect(activeEffects, effectId) {
+  return activeEffects.filter((effect) => effect.id !== effectId);
+}
+
 export {
   applyShield,
   applyTemporaryEffect,
   chooseEnemyAction,
   consumeTemporaryEffect,
   getTemporaryEffect,
+  removeTemporaryEffect,
   resolveShieldDamage,
 };
 export default applyDamageVariance;

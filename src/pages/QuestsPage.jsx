@@ -115,6 +115,7 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
                     </span>
                     <span>{objective.description}</span>
                     <strong>
+                      {objective.progressLabel && `${objective.progressLabel}: `}
                       {objective.current} / {objective.required}
                     </strong>
                   </li>
