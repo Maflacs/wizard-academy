@@ -6,25 +6,28 @@ import {
   getQuestStatus,
   isExamReady,
 } from "../utils/quests";
-import { formatAcademyYear, getAcademyYear } from "../utils/academy";
+import {
+  formatAcademyYear,
+  getAcademyYear,
+  getCompletedAcademyYears,
+} from "../utils/academy";
 import "./QuestsPage.css";
 
 function getQuestAcademyYear(quest) {
   return quest.academyYear ?? 1;
 }
 
-function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
+function QuestsPage({ player, quests, enemies, onClaimQuestReward, isResting }) {
   const navigate = useNavigate();
   const academyYear = getAcademyYear(player);
   const [expandedQuests, setExpandedQuests] = useState(new Set());
   const [expandedYears, setExpandedYears] = useState(new Set());
-  const completedYears = Array.from(
-    { length: Math.max(academyYear - 1, 0) },
-    (_, index) => index + 1,
-  );
-  const currentQuests = quests.filter(
-    (quest) => getQuestAcademyYear(quest) === academyYear,
-  );
+  const completedYears = getCompletedAcademyYears(player);
+  const currentQuests = completedYears.includes(academyYear)
+    ? []
+    : quests.filter(
+        (quest) => getQuestAcademyYear(quest) === academyYear,
+      );
 
   function toggleYear(year) {
     setExpandedYears((current) => {
@@ -42,6 +45,8 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
       (objective) => objective.type === "examVictory",
     );
     const examId = getQuestExamId(quest);
+    const examOpponent = enemies.find((enemy) => enemy.examId === examId);
+    const specialMechanic = examOpponent?.specialMechanic;
     const levelRequirement = quest.objectives.find(
       (objective) => objective.type === "minimumLevel",
     );
@@ -99,8 +104,18 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
                 Szükséges szint: {levelRequirement.required} · Jelenlegi szint:{" "}
                 {player.level}
                 {player.level < levelRequirement.required &&
-                  ` · A vizsgához legalább ${levelRequirement.required}. szint szükséges.`}
+                  ` · ${levelRequirement.required}. szint szükséges a záróvizsgához.`}
               </p>
+            )}
+            {isExamQuest && specialMechanic && (
+              <aside className="quest-special-rule">
+                <p className="eyebrow">{specialMechanic.title}</p>
+                <p>
+                  {specialMechanic.description} Pajzs ereje:{" "}
+                  {specialMechanic.shieldAmount}.
+                </p>
+                <p>{specialMechanic.basicAttackNote}</p>
+              </aside>
             )}
             <ul className="quest-objectives">
               {progress.objectives.map((objective) => {
@@ -113,7 +128,16 @@ function QuestsPage({ player, quests, onClaimQuestReward, isResting }) {
                     <span className="objective-mark" aria-hidden="true">
                       {complete ? "✓" : "○"}
                     </span>
-                    <span>{objective.description}</span>
+                    <span className="quest-objective-copy">
+                      <span>{objective.description}</span>
+                      {objective.helperLines && (
+                        <small className="quest-objective-help">
+                          {objective.helperLines.map((line) => (
+                            <span key={line}>{line}</span>
+                          ))}
+                        </small>
+                      )}
+                    </span>
                     <strong>
                       {objective.progressLabel && `${objective.progressLabel}: `}
                       {objective.current} / {objective.required}

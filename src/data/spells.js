@@ -214,6 +214,7 @@ const spells = [
       effectId: "exposed",
       target: "enemy",
       mode: "consume-all-for-damage",
+      comboType: "rune",
       damageBonusPerCharge: 20,
     },
   },
@@ -233,6 +234,7 @@ const spells = [
       effectId: "venom",
       target: "enemy",
       mode: "consume-all-damage-ticks",
+      comboType: "venom",
     },
   },
   {
@@ -252,6 +254,7 @@ const spells = [
       sourceSpellId: "dampening-circle",
       target: "player",
       mode: "consume-all-for-shield",
+      comboType: "defense",
       effectOptional: true,
       baseShieldAmount: 14,
       shieldPerCharge: 7,

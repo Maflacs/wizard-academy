@@ -28,6 +28,21 @@ function getQuestActivityValue(objective, player) {
   return 0;
 }
 
+function getQuestBaselineEntries(objective, player) {
+  const baselineKey = getQuestBaselineKey(objective);
+  if (baselineKey) {
+    return [[baselineKey, getQuestActivityValue(objective, player)]];
+  }
+  if (objective.type === "distinctProgressSinceQuestActivation") {
+    const progressByType = player.progress[objective.progressKey] || {};
+    return objective.progressTypes.map((progressType) => [
+      `${objective.progressKey}:${progressType}`,
+      progressByType[progressType] || 0,
+    ]);
+  }
+  return [];
+}
+
 function getObjectiveProgress(objective, player, questId) {
   if (objective.type === "curriculumProgress") {
     if (objective.lessonId) {
@@ -61,6 +76,15 @@ function getObjectiveProgress(objective, player, questId) {
     const baseline = player.questBaselines?.[questId]?.[baselineKey];
     if (!Number.isFinite(baseline) || baseline < 0) return 0;
     return Math.max(0, current - baseline);
+  }
+  if (objective.type === "distinctProgressSinceQuestActivation") {
+    const progressByType = player.progress[objective.progressKey] || {};
+    const baselines = player.questBaselines?.[questId] || {};
+    return objective.progressTypes.filter((progressType) => {
+      const baseline = baselines[`${objective.progressKey}:${progressType}`];
+      if (!Number.isFinite(baseline) || baseline < 0) return false;
+      return (progressByType[progressType] || 0) > baseline;
+    }).length;
   }
   if (objective.type === "minimumBaseStat") {
     return player.stats[objective.stat] || 0;
@@ -142,6 +166,7 @@ function getQuestExamId(quest) {
 
 export {
   getQuestActivityValue,
+  getQuestBaselineEntries,
   getQuestBaselineKey,
   getObjectiveProgress,
   getQuestProgress,

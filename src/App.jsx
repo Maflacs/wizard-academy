@@ -23,14 +23,17 @@ import {
   updateHealth,
 } from "./utils/health";
 import {
-  getQuestActivityValue,
-  getQuestBaselineKey,
+  getQuestBaselineEntries,
   getQuestExamId,
   getQuestProgress,
   isExamReady,
   isQuestUnlocked,
 } from "./utils/quests";
-import { formatAcademyYear, getAcademyYear } from "./utils/academy";
+import {
+  MAX_IMPLEMENTED_ACADEMY_YEAR,
+  formatAcademyYear,
+  getAcademyYear,
+} from "./utils/academy";
 import getStatUpgradeCost from "./utils/statUpgrades";
 import {
   advanceCurriculumProgress,
@@ -69,6 +72,12 @@ const initialPlayer = {
   curriculumProgressVersion,
   progress: {
     duelWins: 0,
+    comboExecutions: 0,
+    comboExecutionsByType: {
+      rune: 0,
+      venom: 0,
+      defense: 0,
+    },
     itemsPurchased: 0,
     statUpgrades: 0,
     lessonAttendances: 0,
@@ -88,27 +97,22 @@ function captureUnlockedQuestBaselines(player) {
 
   quests.forEach((quest) => {
     if (!isQuestUnlocked(quest, player)) return;
-    const baselineObjectives = quest.objectives.filter((objective) =>
-      Boolean(getQuestBaselineKey(objective)),
+    const baselineEntries = quest.objectives.flatMap((objective) =>
+      getQuestBaselineEntries(objective, player),
     );
-    if (baselineObjectives.length === 0) return;
+    if (baselineEntries.length === 0) return;
 
     const existingBaseline = questBaselines[quest.id] || {};
-    const missingObjectives = baselineObjectives.filter(
-      (objective) =>
-        !Number.isFinite(existingBaseline[getQuestBaselineKey(objective)]) ||
-        existingBaseline[getQuestBaselineKey(objective)] < 0,
+    const missingEntries = baselineEntries.filter(
+      ([baselineKey]) =>
+        !Number.isFinite(existingBaseline[baselineKey]) ||
+        existingBaseline[baselineKey] < 0,
     );
-    if (missingObjectives.length === 0) return;
+    if (missingEntries.length === 0) return;
 
     questBaselines[quest.id] = {
       ...existingBaseline,
-      ...Object.fromEntries(
-        missingObjectives.map((objective) => [
-          getQuestBaselineKey(objective),
-          getQuestActivityValue(objective, player),
-        ]),
-      ),
+      ...Object.fromEntries(missingEntries),
     };
     changed = true;
   });
@@ -197,6 +201,10 @@ function loadPlayer() {
       progress: {
         ...initialPlayer.progress,
         ...savedData.progress,
+        comboExecutionsByType: {
+          ...initialPlayer.progress.comboExecutionsByType,
+          ...savedData.progress?.comboExecutionsByType,
+        },
         lessonAttendancesByCurriculumYear: {
           ...initialPlayer.progress.lessonAttendancesByCurriculumYear,
           ...savedData.progress?.lessonAttendancesByCurriculumYear,
@@ -285,6 +293,7 @@ function formatCountdown(seconds) {
 
 function App() {
   const [player, setPlayer] = useState(loadPlayer);
+  const playerRef = useRef(player);
   const [notification, setNotification] = useState(null);
   const notificationId = useRef(0);
   const [currentTime, setCurrentTime] = useState(Date.now);
@@ -317,9 +326,14 @@ function App() {
   }
 
   function persistPlayer(nextPlayer) {
+    playerRef.current = nextPlayer;
     localStorage.setItem("player-state", JSON.stringify(nextPlayer));
     setPlayer(nextPlayer);
   }
+
+  useEffect(() => {
+    playerRef.current = player;
+  }, [player]);
 
   useEffect(() => {
     // The one-second timer updates the UI; timestamps still decide when energy is granted.
@@ -585,7 +599,7 @@ function App() {
 
   function awardDuelRewards(enemy, remainingHealth) {
     // Initialize a missing active baseline from the pre-victory counter.
-    const playerWithBaselines = captureUnlockedQuestBaselines(player);
+    const playerWithBaselines = captureUnlockedQuestBaselines(playerRef.current);
     const progression = processExperience(
       { ...playerWithBaselines, health: remainingHealth },
       enemy.xpReward,
@@ -660,10 +674,32 @@ function App() {
     if (completesAcademyYear) {
       const completedYear = quest.academyYear ?? 1;
       notify(
-        `Teljesítetted a ${formatAcademyYear(completedYear)} évfolyamot! Megnyílt előtted a ${formatAcademyYear(completedYear + 1)} évfolyam.${learnedMessage}`,
+        completedYear < MAX_IMPLEMENTED_ACADEMY_YEAR
+          ? `Teljesítetted a ${formatAcademyYear(completedYear)} évfolyamot! Megnyílt előtted a ${formatAcademyYear(completedYear + 1)} évfolyam.${learnedMessage}`
+          : `Teljesítetted a ${formatAcademyYear(completedYear)} évfolyamot! Az akadémia jelenlegi tananyagának végére értél.${learnedMessage}`,
         "yearUp",
       );
     }
+  }
+
+  function recordComboExecution(comboType) {
+    if (!comboType) return;
+    // Capture newly active quest baselines before advancing lifetime counters.
+    const playerWithBaselines = captureUnlockedQuestBaselines(playerRef.current);
+    const comboExecutionsByType =
+      playerWithBaselines.progress.comboExecutionsByType || {};
+    persistPlayer({
+      ...playerWithBaselines,
+      progress: {
+        ...playerWithBaselines.progress,
+        comboExecutions:
+          (playerWithBaselines.progress.comboExecutions || 0) + 1,
+        comboExecutionsByType: {
+          ...comboExecutionsByType,
+          [comboType]: (comboExecutionsByType[comboType] || 0) + 1,
+        },
+      },
+    });
   }
 
   function completeExam(examId, remainingHealth) {
@@ -692,9 +728,13 @@ function App() {
   }
 
   function persistDuelHealth(remainingHealth) {
+    const currentPlayer = playerRef.current;
     persistPlayer({
-      ...player,
-      health: Math.min(getMaxHealthForLevel(player.level), remainingHealth),
+      ...currentPlayer,
+      health: Math.min(
+        getMaxHealthForLevel(currentPlayer.level),
+        remainingHealth,
+      ),
       lastHealthUpdate: Date.now(),
     });
   }
@@ -811,6 +851,7 @@ function App() {
                 onAwardRewards={awardDuelRewards}
                 onExamVictory={completeExam}
                 onDuelEnd={persistDuelHealth}
+                onComboExecuted={recordComboExecution}
                 isResting={player.isResting}
                 isExamAvailable={isExamAvailable}
               />
@@ -822,6 +863,7 @@ function App() {
               <QuestsPage
                 player={player}
                 quests={quests}
+                enemies={enemies}
                 onClaimQuestReward={claimQuestReward}
                 isResting={player.isResting}
               />

@@ -6,6 +6,21 @@
   color: var(--muted);
   font-size: 14px;
 }
+.duel-special-rule {
+  margin: -8px 0 22px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--gold);
+  background: rgba(188, 167, 123, 0.1);
+}
+.duel-special-rule .eyebrow,
+.duel-special-rule p {
+  margin: 0;
+}
+.duel-special-rule p:not(.eyebrow) {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .auto-button {
   margin-top: 20px;
 }
@@ -67,6 +82,10 @@
 .spell-action small {
   color: var(--muted);
   font-style: italic;
+}
+.spell-action .adaptive-repeat-warning {
+  color: var(--red);
+  font-weight: bold;
 }
 .spell-action .button {
   margin-top: auto;

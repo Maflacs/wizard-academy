@@ -1,11 +1,13 @@
+import { clampAcademyYear } from "./academy";
+
 const curriculumProgressVersion = 1;
 
 function getCurriculumCap(academyYear) {
-  return Math.max(1, academyYear) * 6;
+  return clampAcademyYear(academyYear) * 6;
 }
 
 function getSubjectCurriculumYear(progress, academyYear) {
-  const unlockedYear = Math.max(1, academyYear);
+  const unlockedYear = clampAcademyYear(academyYear);
   if (progress >= getCurriculumCap(unlockedYear)) return unlockedYear;
   return Math.min(unlockedYear, Math.floor(Math.max(0, progress) / 6) + 1);
 }

@@ -365,6 +365,79 @@ const quests = [
     ],
     rewards: { xp: 400, gold: 300 },
   },
+  {
+    id: "magic-in-harmony",
+    academyYear: 3,
+    prerequisiteQuestId: "interwoven-magic",
+    name: "A mágia összhangja",
+    description:
+      "A fejlett varázslatok ereje nem önmagukban, hanem megfelelő előkészítésükben és időzítésükben rejlik. Bizonyítsd, hogy többféle mágikus összhangot is képes vagy uralni.",
+    objectives: [
+      {
+        id: "execute-four-year-three-combos",
+        type: "progressSinceQuestActivation",
+        progressKey: "comboExecutions",
+        required: 4,
+        progressLabel: "Kombók",
+        description:
+          "Hajts végre 4 sikeres III. évfolyamos összetett kombinációt",
+        helperLines: [
+          "Számító kombinációk:",
+          "Rúnatörés → Rúnakisülés",
+          "Méreginda → Méregszüret",
+          "Csillapító kör → Őrzőbástya",
+        ],
+      },
+      {
+        id: "use-two-year-three-combo-types",
+        type: "distinctProgressSinceQuestActivation",
+        progressKey: "comboExecutionsByType",
+        progressTypes: ["rune", "venom", "defense"],
+        required: 2,
+        progressLabel: "Különböző kombinációk",
+        description:
+          "Használj legalább 2 különböző kombinációt a fentiek közül",
+      },
+      {
+        id: "win-three-new-harmony-duels",
+        type: "progressSinceQuestActivation",
+        progressKey: "duelWins",
+        required: 3,
+        progressLabel: "Győzelmek",
+        description:
+          "Győzz 3 új normál párbajban a feladat megnyílása után",
+      },
+    ],
+    rewards: { xp: 300, gold: 225 },
+  },
+  {
+    id: "third-exam",
+    academyYear: 3,
+    prerequisiteQuestId: "magic-in-harmony",
+    name: "Az alkalmazkodás próbája",
+    description:
+      "A III. évfolyam zárópróbáján nem elég az erő. Bizonyítanod kell, hogy képes vagy változtatni a varázslataidon, mielőtt ellenfeled kiismeri a mintáidat.",
+    objectives: [
+      {
+        id: "reach-third-exam-level",
+        type: "minimumLevel",
+        required: 15,
+        description: "Érd el legalább a 15. szintet",
+      },
+      {
+        id: "win-third-exam",
+        type: "examVictory",
+        examId: "third-exam",
+        milestoneId: "third-exam",
+        required: 1,
+        description:
+          "Győzd le Serent, a Rezonanciaőrt a III. évfolyam záróvizsgáján",
+      },
+    ],
+    rewards: { xp: 650, gold: 500 },
+    milestoneId: "third-exam",
+    yearCompletionMilestone: "third-year-complete",
+  },
 ];
 
 export default quests;

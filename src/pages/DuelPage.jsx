@@ -58,6 +58,50 @@ function getInteractionEffect(action, state) {
   );
 }
 
+function getAdaptiveRepeatMechanic(state) {
+  const mechanic = state.scaledEnemy.specialMechanic;
+  return mechanic?.type === "adaptive-shield-on-repeat" ? mechanic : null;
+}
+
+function isAdaptiveSpellRepeat(action, state) {
+  return Boolean(
+    action.id !== basicAttack.id &&
+      getAdaptiveRepeatMechanic(state) &&
+      state.lastPlayerSpellId === action.id,
+  );
+}
+
+function prepareEnemyForPlayerAction(state, action, addLog) {
+  const mechanic = getAdaptiveRepeatMechanic(state);
+  if (!mechanic) return;
+  if (action.id === basicAttack.id) {
+    state.lastPlayerSpellId = null;
+    return;
+  }
+
+  const repeatedSpell = state.lastPlayerSpellId === action.id;
+  state.lastPlayerSpellId = action.id;
+  if (!repeatedSpell) return;
+
+  const previousShield = state.enemyShield;
+  state.enemyShield = applyShield(state.enemyShield, {
+    shieldAmount: mechanic.shieldAmount,
+  });
+  addLog(
+    `${state.scaledEnemy.name} felismerte az ismétlődő varázslatmintát.`,
+  );
+  addLog(
+    state.enemyShield > previousShield
+      ? `${mechanic.name} ereje: ${state.enemyShield}.`
+      : `${state.scaledEnemy.name} alkalmazkodó védelme továbbra is aktív. Pajzs ereje: ${state.enemyShield}.`,
+  );
+}
+
+function recordSuccessfulCombo(interaction, effect, onComboExecuted) {
+  if (!effect || !interaction?.comboType) return;
+  onComboExecuted?.(interaction.comboType);
+}
+
 function getGeneratedShieldAmount(action, state) {
   if (action.shieldAmount !== undefined) return action.shieldAmount;
   const interaction = action.effectInteraction;
@@ -138,6 +182,9 @@ function chooseWeightedAutoAction(
       getDefensiveTemporaryEffectAutoWeight(action, state) !== 0 &&
       getEffectInteractionAutoWeight(action, state) !== 0,
   );
+  const hasNonRepeatingAlternative = healthEligibleActions.some(
+    (action) => !isAdaptiveSpellRepeat(action, state),
+  );
   const weightedActions = healthEligibleActions.map((action) => {
     let weight = 1;
     const defensiveEffectWeight = getDefensiveTemporaryEffectAutoWeight(
@@ -167,6 +214,12 @@ function chooseWeightedAutoAction(
       )
     ) {
       weight += 2;
+    }
+    if (
+      hasNonRepeatingAlternative &&
+      isAdaptiveSpellRepeat(action, state)
+    ) {
+      weight = Math.max(0.25, weight * 0.15);
     }
     return { action, weight };
   });
@@ -217,6 +270,7 @@ function createDuelState(enemy, player, items) {
     combatShieldName: null,
     enemyShield: 0,
     enemyShieldCooldown: 0,
+    lastPlayerSpellId: null,
     activeEffects: { player: [], enemy: [] },
   };
 }
@@ -316,7 +370,13 @@ function applySpellEffect(state, effect, addLog) {
   addLog(`${effect.name} hatás aktiválódott (${effect.charges} alkalom).`);
 }
 
-function performPlayerShield(state, spell, addLog, manual = false) {
+function performPlayerShield(
+  state,
+  spell,
+  addLog,
+  manual = false,
+  onComboExecuted,
+) {
   const interaction = spell.effectInteraction;
   if (interaction?.mode === "consume-all-for-shield") {
     const convertedEffect = getInteractionEffect(spell, state);
@@ -329,6 +389,7 @@ function performPlayerShield(state, spell, addLog, manual = false) {
           interaction.effectId,
         ),
       };
+      recordSuccessfulCombo(interaction, convertedEffect, onComboExecuted);
     }
     state.combatShield = applyShield(state.combatShield, {
       shieldAmount: generatedShield,
@@ -546,7 +607,13 @@ function performEnemyAction(state, effectiveStats, addLog) {
   );
 }
 
-function performPlayerAttack(state, spell, effectiveStats, addLog) {
+function performPlayerAttack(
+  state,
+  spell,
+  effectiveStats,
+  addLog,
+  onComboExecuted,
+) {
   const interaction = spell.effectInteraction;
   const convertedEffect =
     interaction?.mode === "consume-all-for-damage"
@@ -563,6 +630,7 @@ function performPlayerAttack(state, spell, effectiveStats, addLog) {
         interaction.effectId,
       ),
     };
+    recordSuccessfulCombo(interaction, convertedEffect, onComboExecuted);
   }
   const result = getAttackDamage(
     spell,
@@ -617,6 +685,7 @@ function performPlayerAttack(state, spell, effectiveStats, addLog) {
         interaction.effectId,
       ),
     };
+    recordSuccessfulCombo(interaction, harvestedEffect, onComboExecuted);
     addLog(`${spell.name} felszabadította a ${harvestedEffect.name} hatást.`);
     for (let charge = 0; charge < harvestedEffect.charges; charge += 1) {
       dealTemporaryEffectDamage(state, harvestedEffect, addLog);
@@ -627,7 +696,7 @@ function performPlayerAttack(state, spell, effectiveStats, addLog) {
   applySpellEffect(state, spell.effect, addLog);
 }
 
-function simulateDuel(player, spells, items, duelState) {
+function simulateDuel(player, spells, items, duelState, onComboExecuted) {
   const state = {
     ...duelState,
     activeEffects: {
@@ -650,11 +719,18 @@ function simulateDuel(player, spells, items, duelState) {
       previousPlayerActionWasDefensive,
     );
     const preservedAttackEffect = getPlayerAttackAmplifyingEffect(state);
+    prepareEnemyForPlayerAction(state, action, addLog);
     state.combatMana -= action.manaCost;
     if (action.type === "attack" || action.id === basicAttack.id) {
-      performPlayerAttack(state, action, effectiveStats, addLog);
+      performPlayerAttack(
+        state,
+        action,
+        effectiveStats,
+        addLog,
+        onComboExecuted,
+      );
     } else if (action.type === "shield") {
-      performPlayerShield(state, action, addLog);
+      performPlayerShield(state, action, addLog, false, onComboExecuted);
       logPreservedTemporaryEffect(
         state,
         "enemy",
@@ -715,6 +791,7 @@ function DuelPage({
   onAwardRewards,
   onExamVictory,
   onDuelEnd,
+  onComboExecuted,
   isExamAvailable,
   isResting,
 }) {
@@ -722,6 +799,7 @@ function DuelPage({
   const navigate = useNavigate();
   const examId = new URLSearchParams(location.search).get("exam");
   const isExamMode = Boolean(examId);
+  const trackComboExecution = isExamMode ? null : onComboExecuted;
   const examOpponent = enemies.find((enemy) => enemy.examId === examId);
   const normalEnemies = enemies.filter((enemy) => !enemy.isExamOpponent);
   const examCompleted = player.completedMilestones.includes(examId);
@@ -767,6 +845,10 @@ function DuelPage({
         ["attack", "shield", "heal", "buff"].includes(spell.type),
     );
   const usableActions = getUsablePlayerActions(player, availableSpells, duel);
+  const adaptiveMechanic = getAdaptiveRepeatMechanic(duel);
+  const previousPlayerSpell = spells.find(
+    (spell) => spell.id === duel.lastPlayerSpellId,
+  );
   const showFallback =
     usableActions.length === 1 && usableActions[0].id === basicAttack.id;
   const needsInfirmary = player.health <= 0 || duel.combatHealth <= 0;
@@ -837,10 +919,23 @@ function DuelPage({
       return;
     const nextDuel = { ...duel, combatMana: duel.combatMana - spell.manaCost };
     const preservedAttackEffect = getPlayerAttackAmplifyingEffect(nextDuel);
+    prepareEnemyForPlayerAction(nextDuel, spell, addLog);
     if (spell.type === "attack" || spell.id === basicAttack.id) {
-      performPlayerAttack(nextDuel, spell, effectiveStats, addLog);
+      performPlayerAttack(
+        nextDuel,
+        spell,
+        effectiveStats,
+        addLog,
+        trackComboExecution,
+      );
     } else if (spell.type === "shield") {
-      performPlayerShield(nextDuel, spell, addLog, true);
+      performPlayerShield(
+        nextDuel,
+        spell,
+        addLog,
+        true,
+        trackComboExecution,
+      );
       logPreservedTemporaryEffect(
         nextDuel,
         "enemy",
@@ -879,7 +974,13 @@ function DuelPage({
 
   function startAutomaticCombat() {
     if (duelStatus !== "active") return;
-    const result = simulateDuel(player, spells, items, duel);
+    const result = simulateDuel(
+      player,
+      spells,
+      items,
+      duel,
+      trackComboExecution,
+    );
     setDuel(result);
     setCombatLog(result.log);
     setDuelStatus(result.status);
@@ -916,6 +1017,21 @@ function DuelPage({
           Automatikus harc: az egész párbaj egy pillanat alatt lezajlik.
         </span>
       </div>
+      {adaptiveMechanic && (
+        <aside className="duel-special-rule">
+          <p className="eyebrow">{adaptiveMechanic.title}</p>
+          <p>
+            {adaptiveMechanic.description} Pajzs ereje:{" "}
+            {adaptiveMechanic.shieldAmount}.
+          </p>
+          <p>{adaptiveMechanic.basicAttackNote}</p>
+          {previousPlayerSpell && (
+            <p>
+              <strong>Előző varázslat:</strong> {previousPlayerSpell.name}
+            </p>
+          )}
+        </aside>
+      )}
       <div className="duelants">
         <article className="parchment-panel combatant player-combatant">
           <p className="eyebrow">Te</p>
@@ -956,6 +1072,10 @@ function DuelPage({
                   duel,
                 );
                 const interaction = spell.effectInteraction;
+                const repeatsPreparedSpell =
+                  duel.combatMana >= spell.manaCost &&
+                  !unavailableReason &&
+                  isAdaptiveSpellRepeat(spell, duel);
                 return (
                   <article
                   className="parchment-panel spell-action"
@@ -1012,6 +1132,12 @@ function DuelPage({
                     <p>Mérgezett: hátralévő hatások azonnali aktiválása</p>
                   )}
                   <p>Manaigény: {spell.manaCost}</p>
+                  {repeatsPreparedSpell && (
+                    <small className="adaptive-repeat-warning">
+                      Ismétlés: {duel.scaledEnemy.name} legalább{" "}
+                      {adaptiveMechanic.shieldAmount} pajzserőt tart fenn.
+                    </small>
+                  )}
                   <button
                     className="button"
                     type="button"

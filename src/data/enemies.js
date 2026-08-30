@@ -97,6 +97,40 @@ const enemies = [
       { type: "shield", weight: 20, shieldAmount: 10 },
     ],
   },
+  {
+    id: "seren-resonance-guardian",
+    name: "Seren, a Rezonanciaőr",
+    description:
+      "A III. évfolyam vizsgáztatója, aki felismeri és pajzzsal bünteti az ismétlődő varázslatmintákat.",
+    isExamOpponent: true,
+    examId: "third-exam",
+    examTitle: "Harmadik vizsga",
+    archetype: "exam",
+    combatStyle: "Alkalmazkodó vizsgáztató",
+    difficulty: "Harmadik vizsga",
+    baseHealth: 65,
+    baseAttack: 12,
+    healthPerLevel: 12,
+    attackPerLevel: 2,
+    healthMultiplier: 1.2,
+    attackMultiplier: 1.05,
+    baseXpReward: 0,
+    baseGoldReward: 0,
+    actions: [
+      { type: "attack", weight: 75 },
+      { type: "heavyAttack", weight: 25 },
+    ],
+    specialMechanic: {
+      type: "adaptive-shield-on-repeat",
+      name: "Alkalmazkodó pajzs",
+      title: "Alkalmazkodó védelem",
+      shieldAmount: 18,
+      description:
+        "Seren felismeri az ismétlődő varázslatmintákat. Ha ugyanazt a bekészített varázslatot két saját akcióban egymás után használod, alkalmazkodó pajzsot emel.",
+      basicAttackNote:
+        "A Pálcaütés nem váltja ki a hatást, és megszakítja az ismétlést.",
+    },
+  },
 ];
 
 export default enemies;
