@@ -438,6 +438,39 @@ const quests = [
     milestoneId: "third-exam",
     yearCompletionMilestone: "third-year-complete",
   },
+  {
+    id: "next-move",
+    academyYear: 4,
+    name: "A következő lépés",
+    description:
+      "A magasabb szintű párbajokban nemcsak a saját varázslataid számítanak. Tanuld meg felismerni, mire készül az ellenfeled, és igazítsd hozzá a döntéseidet.",
+    objectives: [
+      {
+        id: "attend-any-year-four-lesson",
+        type: "lessonAttendanceSinceQuestActivation",
+        curriculumYear: 4,
+        required: 1,
+        description: "Vegyél részt egy IV. évfolyamos tanórán",
+      },
+      {
+        id: "reach-one-year-four-curriculum-milestone",
+        type: "curriculumMilestoneCount",
+        lessonIds: ["charms", "herbology", "defensive-magic"],
+        requiredProgress: 21,
+        required: 1,
+        description:
+          "Érd el a 21-es tanulmányi mérföldkövet legalább 1 tantárgyból",
+      },
+      {
+        id: "prepare-year-four-spell",
+        type: "preparedSpell",
+        spellIds: ["counter-cadence", "ambush-vine", "foresight-ward"],
+        required: 1,
+        description: "Készíts be legalább egy IV. évfolyamos varázslatot",
+      },
+    ],
+    rewards: { xp: 250, gold: 175 },
+  },
 ];
 
 export default quests;

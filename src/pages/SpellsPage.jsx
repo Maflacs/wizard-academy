@@ -62,6 +62,9 @@ function SpellDetails({ spell, spells }) {
         {spell.effectInteraction?.mode === "consume-all-damage-ticks" && <div><dt>Mérgezett átalakítása</dt><dd>Hátralévő hatások azonnal</dd></div>}
         {spell.effectInteraction?.mode === "consume-all-for-shield" && <div><dt>Alappajzs</dt><dd>{spell.effectInteraction.baseShieldAmount}</dd></div>}
         {spell.effectInteraction?.mode === "consume-all-for-shield" && <div><dt>{spell.effectInteraction.effectName}</dt><dd>+{spell.effectInteraction.shieldPerCharge} pajzs / alkalom</dd></div>}
+        {spell.intentInteraction?.mode === "damage-multiplier" && <div><dt>Védekező szándék</dt><dd>+{spell.intentInteraction.magnitude}% sebzés</dd></div>}
+        {spell.intentInteraction?.mode === "heal" && <div><dt>Támadó szándék</dt><dd>+{spell.intentInteraction.healAmount} életerő</dd></div>}
+        {spell.intentInteraction?.mode === "shield-bonus" && <div><dt>Erős támadás</dt><dd>+{spell.intentInteraction.shieldBonus} pajzs</dd></div>}
         <div><dt>Szükséges szint</dt><dd>{spell.requiredLevel}</dd></div>
       </dl>
       {spell.type === "shield" && !spell.effectInteraction && (
@@ -136,6 +139,24 @@ function SpellDetails({ spell, spells }) {
       )}
       {spell.type === "attack" && spell.healAmount !== undefined && (
         <p className="spell-mechanics">A találat a feltüntetett értékkel gyógyít, de nem emeli az életerőt a maximum fölé.</p>
+      )}
+      {spell.intentInteraction?.mode === "damage-multiplier" && (
+        <p className="spell-mechanics">
+          Ha az ellenfél következő szándéka Védekező mágia, az {spell.name}{" "}
+          +{spell.intentInteraction.magnitude}% sebzést okoz.
+        </p>
+      )}
+      {spell.intentInteraction?.mode === "heal" && (
+        <p className="spell-mechanics">
+          Ha az ellenfél támadásra készül, a {spell.name} legfeljebb{" "}
+          {spell.intentInteraction.healAmount} életerőt állít helyre.
+        </p>
+      )}
+      {spell.intentInteraction?.mode === "shield-bonus" && (
+        <p className="spell-mechanics">
+          Erős támadás előtt a pajzs ereje {spell.shieldAmount}-ról{" "}
+          {spell.shieldAmount + spell.intentInteraction.shieldBonus}-ra nő.
+        </p>
       )}
     </div>
   );

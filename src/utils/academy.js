@@ -1,4 +1,4 @@
-const MAX_IMPLEMENTED_ACADEMY_YEAR = 3;
+const MAX_IMPLEMENTED_ACADEMY_YEAR = 4;
 const ACADEMY_YEAR_COMPLETION_MILESTONES = [
   { year: 1, milestone: "first-year-complete" },
   { year: 2, milestone: "second-year-complete" },

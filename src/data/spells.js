@@ -260,6 +260,60 @@ const spells = [
       shieldPerCharge: 7,
     },
   },
+  {
+    id: "counter-cadence",
+    name: "Ellentaktus",
+    description:
+      "Az ellenfél védekező mágikus ritmusára hangolódó támadás. Különösen hatékony, ha az ellenfél éppen védelmi varázslatra készül.",
+    manaCost: 21,
+    basePower: 24,
+    requiredProgress: 21,
+    requiredLevel: 16,
+    requiredAcademyYear: 4,
+    type: "attack",
+    category: "attack",
+    intentInteraction: {
+      requiredIntent: "defense",
+      mode: "damage-multiplier",
+      magnitude: 30,
+    },
+  },
+  {
+    id: "ambush-vine",
+    name: "Lesinda",
+    description:
+      "A támadásra készülő ellenfél mozdulatára reagáló mágikus inda, amely sebzés közben életerőt juttat vissza használójának.",
+    manaCost: 20,
+    basePower: 20,
+    requiredProgress: 21,
+    requiredLevel: 16,
+    requiredAcademyYear: 4,
+    type: "attack",
+    category: "attack",
+    intentInteraction: {
+      requiredIntentGroup: "damaging",
+      mode: "heal",
+      healAmount: 12,
+    },
+  },
+  {
+    id: "foresight-ward",
+    name: "Előrelátó burok",
+    description:
+      "A közelgő támadás ritmusához igazodó védőburok, amely különösen erőssé válik egy előre jelzett pusztító csapás előtt.",
+    manaCost: 16,
+    shieldAmount: 18,
+    requiredProgress: 21,
+    requiredLevel: 16,
+    requiredAcademyYear: 4,
+    type: "shield",
+    category: "defense",
+    intentInteraction: {
+      requiredIntent: "heavy-attack",
+      mode: "shield-bonus",
+      shieldBonus: 20,
+    },
+  },
 ];
 
 export default spells;

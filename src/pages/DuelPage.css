@@ -48,6 +48,21 @@
   padding-top: 9px;
   border-top: 1px solid var(--line);
 }
+.enemy-intent {
+  margin-top: 13px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  background: rgba(188, 167, 123, 0.12);
+}
+.enemy-intent .eyebrow {
+  margin: 0 0 4px;
+}
+.enemy-intent strong {
+  color: var(--red);
+  font-family: Cinzel, serif;
+  font-size: 14px;
+}
 .active-effects .eyebrow,
 .combatant .active-effects p:not(.eyebrow) {
   margin-top: 4px;
@@ -84,6 +99,10 @@
   font-style: italic;
 }
 .spell-action .adaptive-repeat-warning {
+  color: var(--red);
+  font-weight: bold;
+}
+.spell-action .intent-match-hint {
   color: var(--red);
   font-weight: bold;
 }

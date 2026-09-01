@@ -47,6 +47,22 @@ function getSpellQuickStats(spell, spells = []) {
       label: `Kritikus bónusz: +${spell.critChanceBonus}%`,
     });
   }
+  if (spell.intentInteraction?.mode === "damage-multiplier") {
+    stats.push({
+      id: "intent-interaction",
+      label: `Védekező szándék: +${spell.intentInteraction.magnitude}% sebzés`,
+    });
+  } else if (spell.intentInteraction?.mode === "heal") {
+    stats.push({
+      id: "intent-interaction",
+      label: `Támadó szándék: +${spell.intentInteraction.healAmount} életerő`,
+    });
+  } else if (spell.intentInteraction?.mode === "shield-bonus") {
+    stats.push({
+      id: "intent-interaction",
+      label: `Erős támadás: +${spell.intentInteraction.shieldBonus} pajzs`,
+    });
+  }
   if (spell.effectInteraction?.mode === "consume-all-for-damage") {
     stats.push({
       id: "effect-conversion",

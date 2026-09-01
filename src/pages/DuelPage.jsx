@@ -11,15 +11,55 @@ import applyDamageVariance, {
   resolveShieldDamage,
 } from "../utils/combat";
 import createScaledEnemy from "../utils/enemyScaling";
+import {
+  getEnemyIntent,
+  matchesIntentInteraction,
+} from "../utils/enemyIntent";
 import { getMaxHealthForLevel } from "../utils/playerProgression";
 import { getAcademyYear } from "../utils/academy";
 import "./DuelPage.css";
 
 const basicAttack = { id: "basic-attack", name: "Pálcaütés", manaCost: 0 };
 const maxAutoTurns = 100;
+const maxBaseIntentShieldAutoHealthRatio = 0.4;
 
 function chooseRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function getCurrentEnemyIntent(state) {
+  return state.intentEnabled
+    ? getEnemyIntent(state.pendingEnemyAction)
+    : null;
+}
+
+function getIntentInteractionState(action, state) {
+  const interaction = action.intentInteraction;
+  const intent = getCurrentEnemyIntent(state);
+  return {
+    interaction,
+    intent,
+    active: matchesIntentInteraction(intent, interaction),
+  };
+}
+
+function selectEnemyAction(state) {
+  const shieldOnCooldown = state.enemyShieldCooldown > 0;
+  if (shieldOnCooldown) state.enemyShieldCooldown -= 1;
+  const availableActions = state.scaledEnemy.actions?.filter((action) => {
+    if (action.type !== "shield") return true;
+    const shieldAmount = action.shieldAmount || 10;
+    return !shieldOnCooldown && state.enemyShield <= shieldAmount * 0.5;
+  });
+  return chooseEnemyAction({
+    ...state.scaledEnemy,
+    actions: availableActions,
+  });
+}
+
+function commitNextEnemyAction(state) {
+  if (!state.intentEnabled) return;
+  state.pendingEnemyAction = selectEnemyAction(state);
 }
 
 function isDefensiveTemporaryEffect(action) {
@@ -35,6 +75,24 @@ function isNonDamagingDefensiveAction(action) {
     action.type === "shield" ||
     isDefensiveTemporaryEffect(action) ||
     (action.combatRole === "defense" && action.type !== "attack")
+  );
+}
+
+function shouldExcludeDefensiveActionForIntent(action, state) {
+  return Boolean(
+    getCurrentEnemyIntent(state)?.id === "defense" &&
+      isNonDamagingDefensiveAction(action),
+  );
+}
+
+function shouldExcludeUnenhancedIntentShield(action, state) {
+  if (action.intentInteraction?.mode !== "shield-bonus") return false;
+  const intentState = getIntentInteractionState(action, state);
+  return Boolean(
+    intentState.intent?.id === "normal-attack" &&
+      !intentState.active &&
+      state.combatHealth / state.maxHealth >
+        maxBaseIntentShieldAutoHealthRatio,
   );
 }
 
@@ -103,14 +161,48 @@ function recordSuccessfulCombo(interaction, effect, onComboExecuted) {
 }
 
 function getGeneratedShieldAmount(action, state) {
-  if (action.shieldAmount !== undefined) return action.shieldAmount;
-  const interaction = action.effectInteraction;
-  if (interaction?.mode !== "consume-all-for-shield") return 0;
-  return (
-    interaction.baseShieldAmount +
-    (getInteractionEffect(action, state)?.charges || 0) *
-    interaction.shieldPerCharge
-  );
+  const effectInteraction = action.effectInteraction;
+  let generatedShield = action.shieldAmount || 0;
+  if (effectInteraction?.mode === "consume-all-for-shield") {
+    generatedShield =
+      effectInteraction.baseShieldAmount +
+      (getInteractionEffect(action, state)?.charges || 0) *
+        effectInteraction.shieldPerCharge;
+  }
+  const intentState = getIntentInteractionState(action, state);
+  if (
+    intentState.active &&
+    intentState.interaction.mode === "shield-bonus"
+  ) {
+    generatedShield += intentState.interaction.shieldBonus;
+  }
+  return generatedShield;
+}
+
+function getIntentInteractionAutoBonus(action, state) {
+  const intentState = getIntentInteractionState(action, state);
+  if (!intentState.active) return 0;
+  const { interaction, intent } = intentState;
+  if (interaction.mode === "damage-multiplier") {
+    const basePower = action.basePower || 0;
+    const intentBonusPower = basePower * (interaction.magnitude / 100);
+    return Math.max(8, intentBonusPower + interaction.magnitude / 3);
+  }
+  if (interaction.mode === "heal") {
+    const actualHealing = Math.min(
+      interaction.healAmount,
+      state.maxHealth - state.combatHealth,
+    );
+    if (actualHealing <= 0) return 0;
+    const healingValue = actualHealing / interaction.healAmount;
+    return (intent.id === "heavy-attack" ? 4 : 2) * healingValue;
+  }
+  if (interaction.mode === "shield-bonus") {
+    const healthRatio = state.combatHealth / state.maxHealth;
+    if (healthRatio > 0.8) return 0;
+    return healthRatio > 0.55 ? 2 : 5;
+  }
+  return 0;
 }
 
 function getEffectInteractionAutoWeight(action, state) {
@@ -152,8 +244,13 @@ function getActionUnavailableReason(action, state) {
     }
     return null;
   }
-  if (action.type === "shield" && state.combatShield >= action.shieldAmount) {
-    return "A pajzsod már teljes erejű.";
+  if (action.type === "shield") {
+    const generatedShield = getGeneratedShieldAmount(action, state);
+    if (generatedShield <= state.combatShield) {
+      return action.intentInteraction?.mode === "shield-bonus"
+        ? `Az ${action.name} ${generatedShield}-es pajzsot hozna létre, ami nem erősebb a jelenlegi ${state.combatShield}-es pajzsodnál.`
+        : "A pajzsod már teljes erejű.";
+    }
   }
   if (action.type === "heal" && state.combatHealth >= state.maxHealth) {
     return "Az életerőd már teljes.";
@@ -185,6 +282,22 @@ function chooseWeightedAutoAction(
   const hasNonRepeatingAlternative = healthEligibleActions.some(
     (action) => !isAdaptiveSpellRepeat(action, state),
   );
+  const hasObviousFinisher =
+    state.intentEnabled &&
+    healthEligibleActions.some(
+      (action) => {
+        if (action.type !== "attack" && action.id !== basicAttack.id) {
+          return false;
+        }
+        const intentState = getIntentInteractionState(action, state);
+        const intentMultiplier =
+          intentState.active &&
+          intentState.interaction.mode === "damage-multiplier"
+            ? 1 + intentState.interaction.magnitude / 100
+            : 1;
+        return (action.basePower || 4) * intentMultiplier >= state.enemyHealth;
+      },
+    );
   const weightedActions = healthEligibleActions.map((action) => {
     let weight = 1;
     const defensiveEffectWeight = getDefensiveTemporaryEffectAutoWeight(
@@ -214,6 +327,15 @@ function chooseWeightedAutoAction(
       )
     ) {
       weight += 2;
+    }
+    weight += getIntentInteractionAutoBonus(action, state);
+    if (
+      hasObviousFinisher &&
+      (action.type === "attack" || action.id === basicAttack.id)
+    ) {
+      weight += 7;
+    } else if (hasObviousFinisher && isNonDamagingDefensiveAction(action)) {
+      weight = Math.max(0.25, weight * 0.25);
     }
     if (
       hasNonRepeatingAlternative &&
@@ -259,7 +381,7 @@ function createDuelState(enemy, player, items) {
   const scaledEnemy = createScaledEnemy(enemy, player.level);
   const maxHealth = getMaxHealthForLevel(player.level);
   const maxMana = getEffectiveMaxMana(player, items);
-  return {
+  const state = {
     scaledEnemy,
     enemyHealth: scaledEnemy.maxHealth,
     combatHealth: Math.min(maxHealth, Math.max(0, player.health)),
@@ -271,8 +393,12 @@ function createDuelState(enemy, player, items) {
     enemyShield: 0,
     enemyShieldCooldown: 0,
     lastPlayerSpellId: null,
+    intentEnabled: getAcademyYear(player) >= 4,
+    pendingEnemyAction: null,
     activeEffects: { player: [], enemy: [] },
   };
+  commitNextEnemyAction(state);
+  return state;
 }
 
 function getAttackDamage(spell, effectiveStats, damageMultiplier = 1) {
@@ -309,6 +435,12 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       state.combatMana < spell.manaCost
     )
       return;
+    if (automatic && shouldExcludeDefensiveActionForIntent(spell, state)) {
+      return;
+    }
+    if (automatic && shouldExcludeUnenhancedIntentShield(spell, state)) {
+      return;
+    }
     if (
       automatic &&
       getDefensiveTemporaryEffectAutoWeight(spell, state) === 0
@@ -339,8 +471,8 @@ function getUsablePlayerActions(player, spells, state, automatic = false) {
       (spell.effectInteraction?.mode === "consume-all-for-shield"
         ? getGeneratedShieldAmount(spell, state) > state.combatShield
         : automatic
-          ? state.combatShield <= spell.shieldAmount * 0.5
-          : state.combatShield < spell.shieldAmount)
+          ? state.combatShield <= getGeneratedShieldAmount(spell, state) * 0.5
+          : state.combatShield < getGeneratedShieldAmount(spell, state))
     )
       preparedActions.push(spell);
     if (
@@ -405,10 +537,26 @@ function performPlayerShield(
   }
 
   const hadShield = state.combatShield > 0;
-  state.combatShield = applyShield(state.combatShield, spell);
+  const generatedShield = getGeneratedShieldAmount(spell, state);
+  const intentState = getIntentInteractionState(spell, state);
+  state.combatShield = applyShield(state.combatShield, {
+    shieldAmount: generatedShield,
+  });
   state.combatShieldName = spell.name;
+  if (
+    intentState.active &&
+    intentState.interaction.mode === "shield-bonus"
+  ) {
+    addLog(
+      `Az ${spell.name} kihasználta a közelgő erős támadást (+${intentState.interaction.shieldBonus} pajzs).`,
+    );
+    addLog(`${spell.name} pajzsod ereje: ${state.combatShield}.`);
+    return;
+  }
   addLog(
-    hadShield
+    spell.intentInteraction?.mode === "shield-bonus"
+      ? `${spell.name} pajzsod ereje: ${state.combatShield}.`
+      : hadShield
       ? manual
         ? `Újra megerősítetted a ${spell.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
         : `Újra felállítottad a ${spell.name} varázslatot. Pajzsod ereje: ${state.combatShield}.`
@@ -490,17 +638,8 @@ function dealTemporaryEffectDamage(state, effect, addLog) {
 }
 
 function performEnemyAction(state, effectiveStats, addLog) {
-  const shieldOnCooldown = state.enemyShieldCooldown > 0;
-  if (shieldOnCooldown) state.enemyShieldCooldown -= 1;
-  const availableActions = state.scaledEnemy.actions?.filter((action) => {
-    if (action.type !== "shield") return true;
-    const shieldAmount = action.shieldAmount || 10;
-    return !shieldOnCooldown && state.enemyShield <= shieldAmount * 0.5;
-  });
-  const action = chooseEnemyAction({
-    ...state.scaledEnemy,
-    actions: availableActions,
-  });
+  const action = state.pendingEnemyAction || selectEnemyAction(state);
+  state.pendingEnemyAction = null;
   const isDamagingAction = ["attack", "heavyAttack"].includes(action.type);
   const venom = state.activeEffects.enemy.find(
     (effect) =>
@@ -615,6 +754,7 @@ function performPlayerAttack(
   onComboExecuted,
 ) {
   const interaction = spell.effectInteraction;
+  const intentState = getIntentInteractionState(spell, state);
   const convertedEffect =
     interaction?.mode === "consume-all-for-damage"
       ? getInteractionEffect(spell, state)
@@ -622,6 +762,10 @@ function performPlayerAttack(
   const conversionBonus = convertedEffect
     ? convertedEffect.charges * interaction.damageBonusPerCharge
     : 0;
+  const intentDamageBonus =
+    intentState.active && intentState.interaction.mode === "damage-multiplier"
+      ? intentState.interaction.magnitude
+      : 0;
   if (convertedEffect) {
     state.activeEffects = {
       ...state.activeEffects,
@@ -635,7 +779,7 @@ function performPlayerAttack(
   const result = getAttackDamage(
     spell,
     effectiveStats,
-    1 + conversionBonus / 100,
+    (1 + conversionBonus / 100) * (1 + intentDamageBonus / 100),
   );
   let damage = typeof result === "number" ? result : result.damage;
   let consumedExposed = null;
@@ -649,6 +793,11 @@ function performPlayerAttack(
     consumedExposed = exposed;
   }
   damageEnemyThroughShield(state, damage, spell.name, addLog);
+  if (intentDamageBonus > 0) {
+    addLog(
+      `Az ${spell.name} kihasználta az ellenfél védekező szándékát (+${intentDamageBonus}% sebzés).`,
+    );
+  }
   if (convertedEffect) {
     addLog(
       `${spell.name} felhasználta a ${convertedEffect.name} hatás ${convertedEffect.charges} hátralévő alkalmát (+${conversionBonus}% sebzés).`,
@@ -672,6 +821,18 @@ function performPlayerAttack(
     );
     state.combatHealth += healed;
     if (healed > 0) addLog(`${spell.name} ${healed} életerőt állított helyre.`);
+  }
+  if (intentState.active && intentState.interaction.mode === "heal") {
+    const healed = Math.min(
+      intentState.interaction.healAmount,
+      state.maxHealth - state.combatHealth,
+    );
+    state.combatHealth += healed;
+    if (healed > 0) {
+      addLog(
+        `A ${spell.name} kihasználta az ellenfél támadó szándékát, és ${healed} életerőt állított helyre.`,
+      );
+    }
   }
   const harvestedEffect =
     interaction?.mode === "consume-all-damage-ticks"
@@ -760,11 +921,16 @@ function simulateDuel(player, spells, items, duelState, onComboExecuted) {
       );
     }
     previousPlayerActionWasDefensive = isNonDamagingDefensiveAction(action);
-    if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
+    if (state.enemyHealth <= 0) {
+      state.pendingEnemyAction = null;
+      return { ...state, status: "victory", log };
+    }
     performEnemyAction(state, effectiveStats, addLog);
     if (state.enemyHealth <= 0) return { ...state, status: "victory", log };
     if (state.combatHealth <= 0) return { ...state, status: "defeat", log };
+    commitNextEnemyAction(state);
   }
+  state.pendingEnemyAction = null;
   return { ...state, status: "draw", log };
 }
 
@@ -846,6 +1012,7 @@ function DuelPage({
     );
   const usableActions = getUsablePlayerActions(player, availableSpells, duel);
   const adaptiveMechanic = getAdaptiveRepeatMechanic(duel);
+  const enemyIntent = getCurrentEnemyIntent(duel);
   const previousPlayerSpell = spells.find(
     (spell) => spell.id === duel.lastPlayerSpellId,
   );
@@ -890,12 +1057,13 @@ function DuelPage({
 
   function performManualEnemyTurn(nextDuel) {
     performEnemyAction(nextDuel, effectiveStats, addLog);
-    setDuel(nextDuel);
     if (nextDuel.enemyHealth <= 0) {
+      setDuel(nextDuel);
       finishVictory(nextDuel);
       return;
     }
     if (nextDuel.combatHealth <= 0) {
+      setDuel(nextDuel);
       onDuelEnd(0);
       setDuelStatus("defeat");
       addLog(
@@ -903,7 +1071,10 @@ function DuelPage({
           ? "A vizsga ezúttal nem sikerült. Felépülés után újra megpróbálhatod."
           : "Vereség! A gyakorlópárbajt elvesztetted.",
       );
+      return;
     }
+    commitNextEnemyAction(nextDuel);
+    setDuel(nextDuel);
   }
 
   function castSpell(spell) {
@@ -965,6 +1136,7 @@ function DuelPage({
       );
     }
     if (nextDuel.enemyHealth <= 0) {
+      nextDuel.pendingEnemyAction = null;
       setDuel(nextDuel);
       finishVictory(nextDuel);
       return;
@@ -1058,6 +1230,18 @@ function DuelPage({
             Életerő: {duel.enemyHealth} / {duel.scaledEnemy.maxHealth}
           </p>
           {duel.enemyShield > 0 && <p>Védőpajzs: {duel.enemyShield}</p>}
+          {duelStatus === "active" && enemyIntent && (
+            <div
+              className={`enemy-intent enemy-intent-${enemyIntent.id}`}
+              aria-live="polite"
+            >
+              <p className="eyebrow">Következő szándék</p>
+              <strong>
+                <span aria-hidden="true">{enemyIntent.icon}</span>{" "}
+                {enemyIntent.label}
+              </strong>
+            </div>
+          )}
           <EffectList effects={duel.activeEffects.enemy} />
         </article>
       </div>
@@ -1072,6 +1256,7 @@ function DuelPage({
                   duel,
                 );
                 const interaction = spell.effectInteraction;
+                const intentState = getIntentInteractionState(spell, duel);
                 const repeatsPreparedSpell =
                   duel.combatMana >= spell.manaCost &&
                   !unavailableReason &&
@@ -1091,9 +1276,7 @@ function DuelPage({
                     </p>
                   ) : spell.type === "shield" ? (
                     <p>
-                      Pajzs: {interaction?.mode === "consume-all-for-shield"
-                        ? getGeneratedShieldAmount(spell, duel)
-                        : spell.shieldAmount}
+                      Pajzs: {getGeneratedShieldAmount(spell, duel)}
                     </p>
                   ) : spell.type === "heal" ? (
                     <p>Gyógyítás: {spell.healAmount}</p>
@@ -1131,6 +1314,25 @@ function DuelPage({
                   {interaction?.mode === "consume-all-damage-ticks" && (
                     <p>Mérgezett: hátralévő hatások azonnali aktiválása</p>
                   )}
+                  {spell.intentInteraction?.mode === "damage-multiplier" && (
+                    <p>
+                      Védekező szándék: +
+                      {spell.intentInteraction.magnitude}% sebzés
+                    </p>
+                  )}
+                  {spell.intentInteraction?.mode === "heal" && (
+                    <p>
+                      Támadó szándék: +{spell.intentInteraction.healAmount}{" "}
+                      életerő
+                    </p>
+                  )}
+                  {intentState.active &&
+                    spell.intentInteraction?.mode === "shield-bonus" && (
+                      <p className="intent-match-hint">
+                        Erős támadásra hangolva: +
+                        {spell.intentInteraction.shieldBonus} pajzs
+                      </p>
+                    )}
                   <p>Manaigény: {spell.manaCost}</p>
                   {repeatsPreparedSpell && (
                     <small className="adaptive-repeat-warning">
